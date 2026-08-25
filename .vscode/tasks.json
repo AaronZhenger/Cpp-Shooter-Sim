@@ -1,4 +1,5 @@
 {
+    "version": "2.0.0",
     "tasks": [
         {
             "type": "cppbuild",
@@ -8,16 +9,20 @@
                 "/Zi",
                 "/EHsc",
                 "/nologo",
-                "/Fo${workspaceFolder}\\build\\${fileBasenameNoExtension}.obj",
-                "/Fd${workspaceFolder}\\build\\vc140.pdb",
-                "/Fe${workspaceFolder}\\build\\${fileBasenameNoExtension}.exe",
-                "${file}",
+                "/I${workspaceFolder}/include",
+                "${workspaceFolder}/src/main.cpp",
+                "${workspaceFolder}/src/glad.c",
                 "/link",
-                "/PDB:${workspaceFolder}\\build\\${fileBasenameNoExtension}.pdb",
-                "/ILK:${workspaceFolder}\\build\\${fileBasenameNoExtension}.ilk"
+                "/LIBPATH:${workspaceFolder}/lib",
+                "glfw3dll.lib",
+                "opengl32.lib",
+                "user32.lib",
+                "gdi32.lib",
+                "shell32.lib",
+                "/OUT:${workspaceFolder}/src/main.exe"
             ],
             "options": {
-                "cwd": "${fileDirname}"
+                "cwd": "${workspaceFolder}"
             },
             "problemMatcher": [
                 "$msCompile"
@@ -31,7 +36,7 @@
         {
             "label": "Main",
             "type": "process",
-            "command": "${workspaceFolder}/build/main.exe", 
+            "command": "${workspaceFolder}/src/main.exe", 
             "args": [],
             "group": {
                 "kind": "test",
@@ -46,6 +51,5 @@
                 "clear": false
             }
         }
-    ],
-    "version": "2.0.0"
+    ]
 }
