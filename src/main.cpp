@@ -33,10 +33,19 @@ const char* fragmentShaderSource = "#version 330 core\n"
 //     double time = 2;
 // };
 
-// class Projectile {
-//     public:
-//         double rotationalInertia;
-// };
+class Fluid {
+    public:
+        double density;
+};
+
+class Projectile {
+    public:
+        double rotationalInertia;
+        double centerOfMassOffsetX;
+        double centerOfMassOffsetY;
+        double centerOfMassOffsetZ;
+        double crossSectionalArea;
+};
 
 // double getExitBackspin(Mechanism mechanism, Projectile projectile) {
 //             return mechanism.efficiency
