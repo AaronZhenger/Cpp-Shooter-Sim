@@ -17,6 +17,25 @@ const char* fragmentShaderSource = "#version 330 core\n"
 "   FragColor= vec4(0.8f, 0.3f, 0.02f, 1.0f);\n"
 "}\n\0";
 
+class Projectile {
+    public:
+        double mass;
+        double rotationalInertia;
+        double centerOfMassOffsetX;
+        double centerOfMassOffsetY;
+        double centerOfMassOffsetZ;
+        double crossSectionalArea;
+        double radius;
+        double bulkModulus;
+        double dragCoefficient;
+        double dragIsQuadratic = false;
+        const double SPHERE_DRAG_COEFFICIENT = 0.47;
+        const double CUBE_DRAG_COEFFICIENT = 1.05;
+        const double FLAT_DRAG_COEFFICIENT = 1.28;
+        const double BULLET_DRAG_COEFFICIENT = 0.30;
+        const double CAR_DRAG_COEFFICIENT = 0.3;
+};
+
 class Mechanism {
     protected:
         Mechanism(double efficiency, double exitX, double exitY) {
@@ -33,6 +52,10 @@ class Mechanism {
             return 0;
         }
         virtual double getExitAngle(Projectile projectile) {
+            std::cout << "Mechanism not configured yet";
+            return 0;
+        }
+        virtual double getExitBackspin(Projectile projectile) {
             std::cout << "Mechanism not configured yet";
             return 0;
         }
@@ -86,9 +109,8 @@ class Arm : public Mechanism {
         double torque;
         double pointOfReleaseRadians;
 
-        double getExitVelocity(Projectile projectile) {
-            return efficiency
-                * (radius * angularVelocity) / 2;
+        double getExitVelocity(const Projectile& projectile) {
+            return efficiency * radius * angularVelocity;
         }
 };
 
@@ -104,7 +126,7 @@ class SingleRotor : public Mechanism {
         double flywheelAngularVelocity;
         double torque;
 
-        double getExitVelocity(Projectile projectile) {
+        double getExitVelocity(const Projectile& projectile) {
             return efficiency
                 * (flywheelRadius * flywheelAngularVelocity) / 2;
         }
@@ -126,10 +148,19 @@ class DualRotor : public Mechanism {
         double topFlywheelAngularVelocity;
         double torque;
 
-        double getExitVelocity(Projectile projectile) {
+        double getExitVelocity(const Projectile& projectile) {
             return efficiency
                 * (topFlywheelRadius * topFlywheelAngularVelocity + bottomFlywheelRadius * bottomFlywheelAngularVelocity) / 2;
         }
+
+        double getExitBackspin(const Projectile& projectile) {
+            return efficiency
+                * (bottomFlywheelRadius * bottomFlywheelAngularVelocity
+                    - topFlywheelRadius * topFlywheelAngularVelocity)
+                / projectile.radius / 2
+                //* mechanism.time
+                ;
+            };
 };
 
 class Fluid {
@@ -139,36 +170,17 @@ class Fluid {
         double viscosity;
 };
 
-class Projectile {
-    public:
-        double mass;
-        double rotationalInertia;
-        double centerOfMassOffsetX;
-        double centerOfMassOffsetY;
-        double centerOfMassOffsetZ;
-        double crossSectionalArea;
-        double radius;
-        double bulkModulus;
-        double dragCoefficient;
-        double dragIsQuadratic = false;
-        const double SPHERE_DRAG_COEFFICIENT = 0.47;
-        const double CUBE_DRAG_COEFFICIENT = 1.05;
-        const double FLAT_DRAG_COEFFICIENT = 1.28;
-        const double BULLET_DRAG_COEFFICIENT = 0.30;
-        const double CAR_DRAG_COEFFICIENT = 0.3;
-};
-
-double getDragCoefficient(Projectile projectile, Fluid fluid) {
+double getDragCoefficient(const Projectile& projectile, const Fluid& fluid) {
     return (0.5 * fluid.density * projectile.dragCoefficient * projectile.crossSectionalArea);
 };
 
-double getPosX(Projectile projectile, Fluid fluid, Mechanism mechanism, double time) {
-    double noResistance = projectile.mass * mechanism.getExitVelocity()
+double getPosX(const Projectile& projectile, const Fluid& fluid, const Mechanism& mechanism, double time) {
+    double noResistance = projectile.mass * mechanism.getExitVelocity(projectile)
         //* cos(angle)
         ;
 
     double dragOffset = (1 - (
-            pow(std::exp(1.0), (getDragCoefficient(projectile, fluid) * -1 * time) / projectile.mass)
+            std::exp((getDragCoefficient(projectile, fluid) * -1 * time) / projectile.mass)
         ))
         / getDragCoefficient(projectile, fluid);
     
@@ -191,28 +203,14 @@ double getPosY(Projectile projectile, Fluid fluid, Mechanism mechanism, double t
     return mechanism.exitY + dragOffset + gravity;
 };
 
-double getExitBackspin(DualRotor mechanism, Projectile projectile) {
-            return mechanism.efficiency
-                * (mechanism.bottomFlywheelRadius * mechanism.bottomFlywheelAngularVelocity
-                    - mechanism.topFlywheelRadius * mechanism.topFlywheelAngularVelocity)
-                / projectile.rotationalInertia / 2
-                //* mechanism.time
-                ;
-};
-
 int main() {
     DualRotor m_mechanism(0.2, 0.1, 40.0, 40.0, 30.0, 0.85, 0.0, 0.0);
-    m_mechanism.efficiency = 0.85;
-    m_mechanism.bottomFlywheelRadius = 0.2;
-    m_mechanism.topFlywheelRadius = 0.1;
-    m_mechanism.bottomFlywheelAngularVelocity = 40.0;
-    m_mechanism.topFlywheelAngularVelocity = 40.0;
 
     Projectile m_projectile;
     m_projectile.rotationalInertia = 2.0;
 
-    std::cout << m_mechanism.getExitVelocity() << '\n';
-    std::cout << getExitBackspin(m_mechanism, m_projectile) << '\n';
+    std::cout << m_mechanism.getExitVelocity(m_projectile) << '\n';
+    std::cout << m_mechanism.getExitBackspin(m_projectile) << '\n';
 
     glfwInit();
 
