@@ -28,32 +28,23 @@ class Mechanism {
         double efficiency;
         double exitX;
         double exitY;
+        virtual double getExitVelocity(Projectile projectile) {
+            std::cout << "Mechanism not configured yet";
+            return 0;
+        }
+        virtual double getExitAngle(Projectile projectile) {
+            std::cout << "Mechanism not configured yet";
+            return 0;
+        }
 };
 
 class Bounce : public Mechanism {
     public:
-        double treadmillLength;
-        double horizontalDistance;
-        double slingElasticity;
-        double backwardForce;
-        double surfaceElasticity;
+        double surfaceMass;
+        double surfaceAngleWithHorizontal;
+        double surfaceCompression;
 
-        double getExitVelocity() {
-            return efficiency
-                * 0; //calculation is too hard for me :(
-        }
-};
-
-class Treadmill : public Mechanism {
-    public:
-        double treadmillLength;
-        double horizontalDistance;
-        double slingElasticity;
-        double backwardForce;
-        double releaseAngle;
-        double elasticity;
-
-        double getExitVelocity() {
+        double getExitVelocity(Projectile projectile) {
             return efficiency
                 * 0; //calculation is too hard for me :(
         }
@@ -61,27 +52,41 @@ class Treadmill : public Mechanism {
 
 class SlingShot : public Mechanism {
     public:
-        double slingLength;
+        SlingShot(double horizontalDistance, double slingElasticity, double slingMass, double releaseAngle, double efficiency, double exitX, double exitY) : Mechanism(efficiency, exitX, exitY) {
+            this->horizontalDistance = horizontalDistance;
+            this->slingElasticity = slingElasticity;
+            this->slingMass = slingMass;
+            this->releaseAngle = releaseAngle;
+        }
+
         double horizontalDistance;
         double slingElasticity;
-        double backwardForce;
+        double slingMass;
         double releaseAngle;
-        double elasticity;
 
-        double getExitVelocity() {
-            return efficiency
-                * 0; //calculation is too hard for me :(
+        double getExitVelocity(Projectile projectile) {
+            return horizontalDistance
+                * std::sqrt(
+                    (efficiency * slingElasticity) 
+                    / (projectile.mass + slingMass/3));
         }
 };
 
 class Arm : public Mechanism {
     public:
+        Arm(double radius, double angularVelocity, double torque, double pointOfReleaseRadians, double efficiency, double exitX, double exitY) : Mechanism(efficiency, exitX, exitY) {
+            this->radius = radius;
+            this->angularVelocity = angularVelocity;
+            this->torque = torque;
+            this->pointOfReleaseRadians = pointOfReleaseRadians;
+        }
+
         double radius;
         double angularVelocity;
         double torque;
-        double pointOfRelease;
+        double pointOfReleaseRadians;
 
-        double getExitVelocity() {
+        double getExitVelocity(Projectile projectile) {
             return efficiency
                 * (radius * angularVelocity) / 2;
         }
@@ -89,11 +94,17 @@ class Arm : public Mechanism {
 
 class SingleRotor : public Mechanism {
     public:
+        SingleRotor(double flywheelRadius, double flywheelAngularVelocity, double torque, double efficiency, double exitX, double exitY) : Mechanism(efficiency, exitX, exitY) {
+            this->flywheelRadius = flywheelRadius;
+            this->flywheelAngularVelocity = flywheelAngularVelocity;
+            this->torque = torque;
+        }
+
         double flywheelRadius;
         double flywheelAngularVelocity;
         double torque;
 
-        double getExitVelocity() {
+        double getExitVelocity(Projectile projectile) {
             return efficiency
                 * (flywheelRadius * flywheelAngularVelocity) / 2;
         }
@@ -115,7 +126,7 @@ class DualRotor : public Mechanism {
         double topFlywheelAngularVelocity;
         double torque;
 
-        double getExitVelocity() {
+        double getExitVelocity(Projectile projectile) {
             return efficiency
                 * (topFlywheelRadius * topFlywheelAngularVelocity + bottomFlywheelRadius * bottomFlywheelAngularVelocity) / 2;
         }
@@ -152,7 +163,7 @@ double getDragCoefficient(Projectile projectile, Fluid fluid) {
 };
 
 double getPosX(Projectile projectile, Fluid fluid, Mechanism mechanism, double time) {
-    double noResistance = projectile.mass // * velocity
+    double noResistance = projectile.mass * mechanism.getExitVelocity()
         //* cos(angle)
         ;
 
