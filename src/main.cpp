@@ -208,12 +208,15 @@ double getPosX(const Projectile& projectile, const Fluid& fluid, const Mechanism
         //* cos(angle)
         ) / getDragCoefficient(projectile, fluid);
 
+    double omega = projectile.dragCoefficient * mechanism.getExitBackspin(projectile) / projectile.mass;
+    double horizontalDrift = omega; // * g * t / backspin^2
+
     double dragOffset = (1 - (
             std::exp((getDragCoefficient(projectile, fluid) * -1 * time) / projectile.mass)
         ))
         / getDragCoefficient(projectile, fluid);
     
-    return mechanism.exitX + noResistance + dragOffset;
+    return mechanism.exitX + horizontalDrift + noResistance + dragOffset;
 };
 
 double getPosY(const Projectile& projectile, const Fluid& fluid, const Mechanism& mechanism, double time) {
