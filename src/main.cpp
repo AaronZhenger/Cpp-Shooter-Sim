@@ -131,7 +131,11 @@ class Arm : public Mechanism {
         }
 
         double getExitAngle(const Projectile& projectile) const override {
-            return pointOfReleaseRadians + std::numbers::pi;
+            return pointOfReleaseRadians + std::numbers::pi / 2.0;
+        }
+
+        double getExitBackspin(const Projectile& projectile) const override {
+            return angularVelocity;
         }
 };
 
@@ -155,12 +159,13 @@ class SingleRotor : public Mechanism {
 
 class DualRotor : public Mechanism {
     public:
-        DualRotor(double bottomFlywheelRadius, double topFlywheelRadius, double bottomFlywheelAngularVelocity, double topFlywheelAngularVelocity, double torque, double efficiency, double exitX, double exitY) : Mechanism(efficiency, exitX, exitY) {
+        DualRotor(double bottomFlywheelRadius, double topFlywheelRadius, double bottomFlywheelAngularVelocity, double topFlywheelAngularVelocity, double torque, double releaseAngle, double efficiency, double exitX, double exitY) : Mechanism(efficiency, exitX, exitY) {
             this->bottomFlywheelRadius = bottomFlywheelRadius;
             this->topFlywheelRadius = topFlywheelRadius;
             this->bottomFlywheelAngularVelocity = bottomFlywheelAngularVelocity;
             this->topFlywheelAngularVelocity = topFlywheelAngularVelocity;
             this->torque = torque;
+            this->releaseAngle = releaseAngle;
         }
 
         double bottomFlywheelRadius;
@@ -168,19 +173,22 @@ class DualRotor : public Mechanism {
         double bottomFlywheelAngularVelocity;
         double topFlywheelAngularVelocity;
         double torque;
+        double releaseAngle;
 
         double getExitVelocity(const Projectile& projectile) const override {
             return efficiency
                 * (topFlywheelRadius * topFlywheelAngularVelocity + bottomFlywheelRadius * bottomFlywheelAngularVelocity) / 2;
         }
 
+        double getExitVelocity(const Projectile& projectile) const override {
+            return releaseAngle;
+        }
+
         double getExitBackspin(const Projectile& projectile) const override {
             return efficiency
                 * (bottomFlywheelRadius * bottomFlywheelAngularVelocity
                     - topFlywheelRadius * topFlywheelAngularVelocity)
-                / projectile.radius / 2
-                //* mechanism.time
-                ;
+                / projectile.radius / 2;
             };
 };
 
