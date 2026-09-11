@@ -233,7 +233,7 @@ double getPosY(const Projectile& projectile, const Fluid& fluid, const Mechanism
 };
 
 int main() {
-    DualRotor m_mechanism(0.2, 0.1, 40.0, 40.0, 30.0, 0.85, 0.0, 0.0);
+    DualRotor m_mechanism(0.2, 0.1, 40.0, 40.0, 30.0, 45, 0.85, 0.0, 0.0);
 
     Projectile m_projectile(0.2, 1.0, 0.0, 0.0, 0.0, 0.5, 0.2, 0.1);
     m_projectile.rotationalInertia = 2.0;
