@@ -194,6 +194,13 @@ class DualRotor : public Mechanism {
 
 class Fluid {
     public:
+        Fluid(double density, double windSpeed, double viscosity
+        ) {
+            this->density = density;
+            this->windSpeed = windSpeed;
+            this->viscosity = viscosity;
+        }
+
         double density;
         double windSpeed;
         double viscosity;
@@ -204,35 +211,49 @@ double getDragCoefficient(const Projectile& projectile, const Fluid& fluid) {
 };
 
 double getPosX(const Projectile& projectile, const Fluid& fluid, const Mechanism& mechanism, double time) {
-    double noResistance = (projectile.mass * mechanism.getExitVelocity(projectile)
-        //* cos(angle)
-        ) / getDragCoefficient(projectile, fluid);
-
     double omega = projectile.dragCoefficient * mechanism.getExitBackspin(projectile) / projectile.mass;
-    double horizontalDrift = omega; // * g * t / backspin^2
+    double k = getDragCoefficient(projectile, fluid) / projectile.mass;
 
-    double dragOffset = (1 - (
-            std::exp((getDragCoefficient(projectile, fluid) * -1 * time) / projectile.mass)
-        ))
-        / getDragCoefficient(projectile, fluid);
+    double drift = omega * 9.8085 * time / (std::pow(k, 2) + std::pow(omega, 2));
+
+    double a_x = (-omega * mechanism.getExitVelocity(projectile) * sin(mechanism.getExitAngle(projectile))
+        - k * mechanism.getExitVelocity(projectile) * cos(mechanism.getExitAngle(projectile))
+        + (2 * k * omega * 9.8085) / (std::pow(k, 2) + std::pow(omega, 2))
+    ) / (std::pow(k, 2) + std::pow(omega, 2));
+
+    double a_y = (-omega * mechanism.getExitVelocity(projectile) * cos(mechanism.getExitAngle(projectile))
+        - k * mechanism.getExitVelocity(projectile) * sin(mechanism.getExitAngle(projectile))
+        + (2 * k * omega * 9.8085) / (std::pow(k, 2) + std::pow(omega, 2))
+    ) / (std::pow(k, 2) + std::pow(omega, 2));
+
+    double curvature_1 = a_x * (std::exp(-k * time) * cos(omega * time) - 1);
+
+    double curvature_2 = a_y * (std::exp(-k * time) * sin(omega * time));
     
-    return mechanism.exitX + horizontalDrift + noResistance + dragOffset;
+    return mechanism.exitX + drift + curvature_1 + curvature_2;
 };
 
 double getPosY(const Projectile& projectile, const Fluid& fluid, const Mechanism& mechanism, double time) {
-    double gravity = projectile.mass * -9.8085 * time / getDragCoefficient(projectile, fluid);
-
-    double dragOffset = projectile.mass / getDragCoefficient(projectile, fluid)
-        * (1 - (
-            std::exp(1.0), (getDragCoefficient(projectile, fluid) * -1 * time) / projectile.mass
-        ))
-        * (
-            //velocity * sin(angle)
-            0
-            + projectile.mass * 9.8085 / getDragCoefficient(projectile, fluid)
-        );
+    double omega = projectile.dragCoefficient * mechanism.getExitBackspin(projectile) / projectile.mass;
+    double k = getDragCoefficient(projectile, fluid) / projectile.mass;
     
-    return mechanism.exitY + dragOffset + gravity;
+    double drift = k * 9.8085 * time / (std::pow(k, 2) + std::pow(omega, 2));
+    
+    double a_x = (-omega * mechanism.getExitVelocity(projectile) * sin(mechanism.getExitAngle(projectile))
+        - k * mechanism.getExitVelocity(projectile) * cos(mechanism.getExitAngle(projectile))
+        + (2 * k * omega * 9.8085) / (std::pow(k, 2) + std::pow(omega, 2))
+    ) / (std::pow(k, 2) + std::pow(omega, 2));
+
+    double a_y = (-omega * mechanism.getExitVelocity(projectile) * cos(mechanism.getExitAngle(projectile))
+        - k * mechanism.getExitVelocity(projectile) * sin(mechanism.getExitAngle(projectile))
+        + (2 * k * omega * 9.8085) / (std::pow(k, 2) + std::pow(omega, 2))
+    ) / (std::pow(k, 2) + std::pow(omega, 2));
+
+    double curvature_1 = a_y * (std::exp(-k * time) * cos(omega * time) - 1);
+
+    double curvature_2 = a_x * (std::exp(-k * time) * sin(omega * time));
+    
+    return mechanism.exitY - drift + curvature_1 + curvature_2;
 };
 
 int main() {
@@ -240,6 +261,19 @@ int main() {
 
     Projectile m_projectile(0.2, 1.0, 0.0, 0.0, 0.0, 0.5, 0.2, 0.1);
     m_projectile.rotationalInertia = 2.0;
+
+    Fluid m_fluid(0.2, 0.0, 0.2);
+
+    const int seconds = 10;
+    const int hz = 50;
+    int positions[seconds * hz][2];
+    for (int i = 0; i < seconds * hz; i++) {
+        int t = i * (1.0 / hz);
+        positions[i][0] = getPosX(m_projectile, m_fluid, m_mechanism, t);
+        positions[i][1] = getPosY(m_projectile, m_fluid, m_mechanism, t);
+    }
+
+
 
     std::cout << m_mechanism.getExitVelocity(m_projectile) << '\n';
     std::cout << m_mechanism.getExitBackspin(m_projectile) << '\n';
