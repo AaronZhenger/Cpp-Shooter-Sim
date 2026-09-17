@@ -282,7 +282,7 @@ struct Position {
 };
 
 int main() {
-    DualRotor m_mechanism(0.2, 0.1, 40.0, 40.0, 3.14/4, 0.85, 0.0, 0.0);
+    DualRotor m_mechanism(0.2, 0.1, 40.0, 40.0, 3.14/2, 0.85, 0.0, 0.0);
 
     Projectile m_projectile(0.2, 1.0, 0.5, 0.2, 0.1, 0.03);
 
