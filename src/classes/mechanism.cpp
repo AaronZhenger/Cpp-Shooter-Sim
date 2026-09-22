@@ -1,5 +1,4 @@
 #include "Mechanism.h"
-#include "Projectile.h"
 #include <iostream>
 
 Mechanism::Mechanism(double efficiency, double exitX, double exitY)

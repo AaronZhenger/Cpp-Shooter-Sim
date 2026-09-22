@@ -6,6 +6,10 @@
 #include <vector>
 #include <cmath>
 #include <numbers>
+#include "projectile.h"
+#include "mechanism.h"
+#include "fluid.h"
+#include "dualrotor.h"
 
 const char* vertexShaderSource = "#version 330 core\n"
 "layout (location = 0) in vec3 aPos;\n"
@@ -26,204 +30,6 @@ const char* gridFragmentShaderSource = "#version 330 core\n"
 "{\n"
 "   FragColor= vec4(0.5f, 0.5f, 0.5f, 1.0f);\n"
 "}\n\0";
-
-class Projectile {
-    public:
-        Projectile(double mass, double rotationalInertia, double crossSectionalArea, double radius, double dragCoefficient, double magnusCoefficient) {
-            this->mass = mass;
-            this->rotationalInertia = rotationalInertia;
-            this->crossSectionalArea = crossSectionalArea;
-            this->radius = radius;
-            this->dragCoefficient = dragCoefficient;
-            this->magnusCoefficient = magnusCoefficient;
-        }
-
-        double mass;
-        double rotationalInertia;
-        double centerOfMassOffsetX;
-        double centerOfMassOffsetY;
-        double centerOfMassOffsetZ;
-        double crossSectionalArea;
-        double magnusCoefficient;
-        double radius;
-        double dragCoefficient;
-        const double SPHERE_DRAG_COEFFICIENT = 0.47;
-        const double CUBE_DRAG_COEFFICIENT = 1.05;
-        const double FLAT_DRAG_COEFFICIENT = 1.28;
-        const double BULLET_DRAG_COEFFICIENT = 0.30;
-        const double CAR_DRAG_COEFFICIENT = 0.3;
-};
-
-class Mechanism {
-    protected:
-        Mechanism(double efficiency, double exitX, double exitY) {
-            this->efficiency = efficiency;
-            this->exitX = exitX;
-            this->exitY = exitY;
-        }
-    public:
-        double efficiency;
-        double exitX;
-        double exitY;
-        virtual double getExitVelocity(const Projectile& projectile) const {
-            std::cout << "Mechanism not configured yet";
-            return 0;
-        }
-        virtual double getExitAngle(const Projectile& projectile) const {
-            std::cout << "Mechanism not configured yet";
-            return 0;
-        }
-        virtual double getExitBackspin(const Projectile& projectile) const {
-            std::cout << "Mechanism not configured yet";
-            return 0;
-        }
-};
-
-class Bounce : public Mechanism {
-    public:
-        Bounce(double surfaceAngleWithHorizontal, double surfaceVelocity, double slingangleOfIncidenceMass, double efficiency, double exitX, double exitY) : Mechanism(efficiency, exitX, exitY) {
-            this->surfaceAngleWithHorizontal = surfaceAngleWithHorizontal;
-            this->surfaceVelocity = surfaceVelocity;
-            this->angleOfIncidence = angleOfIncidence;
-        }
-
-        double surfaceAngleWithHorizontal;
-        double surfaceVelocity;
-        double angleOfIncidence;
-
-        double getExitVelocity(const Projectile& projectile) const override{
-            return efficiency
-                * surfaceVelocity;
-        }
-
-        double getExitAngle(const Projectile& projectile) const override{
-            return 2 * surfaceAngleWithHorizontal - angleOfIncidence;
-        }
-};
-
-class SlingShot : public Mechanism {
-    public:
-        SlingShot(double horizontalDistance, double slingElasticity, double slingMass, double releaseAngle, double efficiency, double exitX, double exitY) : Mechanism(efficiency, exitX, exitY) {
-            this->horizontalDistance = horizontalDistance;
-            this->slingElasticity = slingElasticity;
-            this->slingMass = slingMass;
-            this->releaseAngle = releaseAngle;
-        }
-
-        double horizontalDistance;
-        double slingElasticity;
-        double slingMass;
-        double releaseAngle;
-
-        double getExitVelocity(const Projectile& projectile) const override {
-            return horizontalDistance
-                * std::sqrt(
-                    (efficiency * slingElasticity) 
-                    / (projectile.mass + slingMass/3));
-        }
-
-        double getExitAngle(const Projectile& projectile) const override {
-            return releaseAngle;
-        }
-
-        double getExitBackspin(const Projectile& projectile) const override {
-            return 0.0;
-        }
-};
-
-class Arm : public Mechanism {
-    public:
-        Arm(double radius, double angularVelocity, double pointOfReleaseRadians, double efficiency, double exitX, double exitY) : Mechanism(efficiency, exitX, exitY) {
-            this->radius = radius;
-            this->angularVelocity = angularVelocity;
-            this->pointOfReleaseRadians = pointOfReleaseRadians;
-        }
-
-        double radius;
-        double angularVelocity;
-        double pointOfReleaseRadians;
-
-        double getExitVelocity(const Projectile& projectile) const override {
-            return efficiency * radius * angularVelocity;
-        }
-
-        double getExitAngle(const Projectile& projectile) const override {
-            return pointOfReleaseRadians + 3.141592653589793238462643383279502884 / 2.0;
-        }
-
-        double getExitBackspin(const Projectile& projectile) const override {
-            return angularVelocity;
-        }
-};
-
-class SingleRotor : public Mechanism {
-    public:
-        SingleRotor(double flywheelRadius, double flywheelAngularVelocity, double releaseAngle, double efficiency, double exitX, double exitY) : Mechanism(efficiency, exitX, exitY) {
-            this->flywheelRadius = flywheelRadius;
-            this->flywheelAngularVelocity = flywheelAngularVelocity;
-            this->releaseAngle = releaseAngle;
-        }
-
-        double flywheelRadius;
-        double flywheelAngularVelocity;
-        double releaseAngle;
-
-        double getExitVelocity(const Projectile& projectile) const override {
-            return efficiency
-                * (flywheelRadius * flywheelAngularVelocity) / 2;
-        }
-
-        double getExitAngle(const Projectile& projectile) const override {
-            return releaseAngle;
-        }
-        
-        double getExitBackspin(const Projectile& projectile) const override {
-            return efficiency
-                * (flywheelRadius * flywheelAngularVelocity) / (2 * projectile.radius);
-        }
-};
-
-class DualRotor : public Mechanism {
-    public:
-        DualRotor(double bottomFlywheelRadius, double topFlywheelRadius, double bottomFlywheelAngularVelocity, double topFlywheelAngularVelocity, double releaseAngle, double efficiency, double exitX, double exitY) : Mechanism(efficiency, exitX, exitY) {
-            this->bottomFlywheelRadius = bottomFlywheelRadius;
-            this->topFlywheelRadius = topFlywheelRadius;
-            this->bottomFlywheelAngularVelocity = bottomFlywheelAngularVelocity;
-            this->topFlywheelAngularVelocity = topFlywheelAngularVelocity;
-            this->releaseAngle = releaseAngle;
-        }
-
-        double bottomFlywheelRadius;
-        double topFlywheelRadius;
-        double bottomFlywheelAngularVelocity;
-        double topFlywheelAngularVelocity;
-        double releaseAngle;
-
-        double getExitVelocity(const Projectile& projectile) const override {
-            return efficiency
-                * (topFlywheelRadius * topFlywheelAngularVelocity + bottomFlywheelRadius * bottomFlywheelAngularVelocity) / 2;
-        }
-
-        double getExitAngle(const Projectile& projectile) const override {
-            return releaseAngle;
-        }
-
-        double getExitBackspin(const Projectile& projectile) const override {
-            return efficiency
-                * (bottomFlywheelRadius * bottomFlywheelAngularVelocity
-                    - topFlywheelRadius * topFlywheelAngularVelocity)
-                / projectile.radius / 2;
-            };
-};
-
-class Fluid {
-    public:
-        Fluid(double density) {
-            this->density = density;
-        }
-
-        double density;
-};
 
 double getDragCoefficient(const Projectile& projectile, const Fluid& fluid) {
     return 0.5 * fluid.density * projectile.dragCoefficient * projectile.crossSectionalArea;
@@ -352,6 +158,20 @@ int main() {
     std::cout << m_mechanism.getExitVelocity(m_projectile) << '\n';
     std::cout << m_mechanism.getExitBackspin(m_projectile) << '\n';
 
+    FT_Library ft;
+    if (FT_Init_FreeType(&ft)) {
+        std::cerr << "ERROR::FREETYPE: Could not init FreeType Library" << std::endl;
+        return -1;
+    }
+
+    FT_Face face;
+    if (FT_New_Face(ft, "src/fonts/Arial.ttf", 0, &face)) {
+        std::cerr << "ERROR::FREETYPE: Failed to load font" << std::endl;  
+        return -1;
+    }
+
+    FT_Set_Pixel_Sizes(face, 0, 48);
+
     glfwInit();
 
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -461,6 +281,5 @@ int main() {
 
     return 0;
 }
-
 
 //MOI, COM, MASS, MAGNUS, DRAG, COP, Area

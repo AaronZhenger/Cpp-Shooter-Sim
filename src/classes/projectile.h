@@ -8,9 +8,6 @@ class Projectile {
 
         double mass;
         double rotationalInertia;
-        double centerOfMassOffsetX;
-        double centerOfMassOffsetY;
-        double centerOfMassOffsetZ;
         double crossSectionalArea;
         double magnusCoefficient;
         double radius;
