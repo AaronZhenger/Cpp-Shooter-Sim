@@ -76,7 +76,7 @@ double getPosX(const Projectile& projectile, const Fluid& fluid, const Mechanism
 
     double a_y = (-omega * mechanism.getExitVelocity(projectile) * cos(mechanism.getExitAngle(projectile))
         - k * mechanism.getExitVelocity(projectile) * sin(mechanism.getExitAngle(projectile))
-        + (2 * k * omega * 9.8085) / (std::pow(k, 2) + std::pow(omega, 2))
+        - ((std::pow(k, 2) - std::pow(omega, 2)) * 9.8085) / (std::pow(k, 2) + std::pow(omega, 2))
     ) / (std::pow(k, 2) + std::pow(omega, 2));
 
     double curvature_1 = a_x * (std::exp(-k * time) * cos(omega * time) - 1);
@@ -119,7 +119,7 @@ struct Character {
 };
 
 int main() {
-    DualRotor m_mechanism(0.2, 0.1, 40.0, 40.0, 3.14/2, 0.85, 0.0, 0.0);
+    DualRotor m_mechanism(0.2, 0.1, 40.0, 40.0, 3.14/4, 0.85, 0.0, 0.0);
     Projectile m_projectile(0.2, 1.0, 0.5, 0.2, 0.1, 0.03);
     Fluid m_fluid(0.2);
 
@@ -162,7 +162,7 @@ int main() {
     positions.reserve(rawPositions.size());
     for (const auto& p : rawPositions) {
         float normX = static_cast<float>(-1.0 + 2.0 * ((p.x - minX) / (maxX - minX)));
-        float normY = static_cast<float>(-1.0 + 2.0 * ((p.y - minY) / (maxY - minY)));
+        float normY = static_cast<float>(-0.25 + 1.25 * ((p.y - minY) / (maxY - minY)));
         positions.push_back({normX, normY});
     }
 
@@ -173,13 +173,13 @@ int main() {
     
     for (double x = std::floor(minX / gridSpacing) * gridSpacing; x <= maxX; x += gridSpacing) {
         float normX = static_cast<float>(-1.0 + 2.0 * ((x - minX) / (maxX - minX)));
-        gridPositions.push_back({normX, -1.0});
+        gridPositions.push_back({normX, -0.25});
         gridPositions.push_back({normX, 1.0});
         xLabels.push_back(x);
     }
 
-    for (double y = std::floor(minY / gridSpacing) * gridSpacing; y <= maxY; y += gridSpacing) {
-        float normY = static_cast<float>(-1.0 + 2.0 * ((y - minY) / (maxY - minY)));
+    for (double y = std::floor(minY / gridSpacing) * gridSpacing + gridSpacing; y <= maxY; y += gridSpacing) {
+        float normY = static_cast<float>(-0.25 + 1.25 * ((y - minY) / (maxY - minY)));
         gridPositions.push_back({-1.0, normY});
         gridPositions.push_back({1.0, normY});
         yLabels.push_back(y);
@@ -207,7 +207,7 @@ int main() {
     }
 
     FT_Face face;
-    if (FT_New_Face(ft, "src/fonts/Monospace.ttf", 0, &face)) {
+    if (FT_New_Face(ft, "src/fonts/ArialBold.ttf", 0, &face)) {
         std::cerr << "no font" << std::endl;  
         return -1;
     }
@@ -384,11 +384,11 @@ int main() {
 
             std::ostringstream ss;
             ss << std::fixed << std::setprecision(1) << val;
-            renderText(ss.str(), pixelX - 12.0f, 15.0f, 0.4f, labelColor);
+            renderText(ss.str(), pixelX - 12.0f, 280.0f, 0.4f, labelColor);
         }
 
         for (double val : yLabels) {
-            float normY = static_cast<float>(-1.0 + 2.0 * ((val - minY) / (maxY - minY)));
+            float normY = static_cast<float>(-0.25 + 1.25 * ((val - minY) / (maxY - minY)));
             float pixelY = (normY + 1.0f) / 2.0f * 800;
 
             std::ostringstream ss;

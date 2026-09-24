@@ -13,6 +13,7 @@
                 "/I${workspaceFolder}/src/classes",
                 "${workspaceFolder}/src/*.cpp",
                 "${workspaceFolder}/src/classes/*.cpp",
+                "${workspaceFolder}/src/imgui/*.cpp",
                 "${workspaceFolder}/src/glad.c",
                 "/Fo:${workspaceFolder}/src/build/",
                 "/Fd:${workspaceFolder}/src/build/",
