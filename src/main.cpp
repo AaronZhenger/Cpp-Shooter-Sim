@@ -13,6 +13,9 @@
 #include "mechanism.h"
 #include "fluid.h"
 #include "dualrotor.h"
+#include "imgui/imgui.h"
+#include "imgui/imgui_impl_glfw.h"
+#include "imgui/imgui_impl_opengl3.h"
 
 const char* vertexShaderSource = "#version 330 core\n"
 "layout (location = 0) in vec3 aPos;\n"
@@ -108,6 +111,8 @@ double getPosY(const Projectile& projectile, const Fluid& fluid, const Mechanism
 }
 
 struct Position {
+    public:
+        Position(double x, double y) : x(x), y(y) {};
     double x, y;
 };
 
@@ -249,6 +254,15 @@ int main() {
     FT_Done_Face(face);
     FT_Done_FreeType(ft);
 
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO(); (void)io;
+
+    ImGui::StyleColorsDark();
+
+    ImGui_ImplGlfw_InitForOpenGL(window, true); 
+    ImGui_ImplOpenGL3_Init("#version 330");
+
     GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
     glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
     glCompileShader(vertexShader);
@@ -366,7 +380,27 @@ int main() {
 
     float labelColor[3] = { 0.8f, 0.8f, 0.8f };
 
+    const char* chr = "Label";
+    double num = 1.0;
+
     while (!glfwWindowShouldClose(window)) {
+        glfwPollEvents();
+
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+
+        ImGui::SetWindowPos(ImVec2(20.0, 400.0), ImGuiCond_FirstUseEver);
+        ImGui::SetWindowSize(ImVec2(300.0, 200.0), ImGuiCond_Always);
+
+        ImGui::Begin("Controls");
+        ImGui::Text("FPS: %.0f", ImGui::GetIO().Framerate);
+        ImGui::Text("Label:");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(100.0);
+        ImGui::InputDouble("##a", &num, 0.1, 1.0, "%.3f", 0);
+        ImGui::End();
+
         glClearColor(0.07f, 0.13f, 0.17f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
@@ -396,8 +430,10 @@ int main() {
             renderText(ss.str(), 10.0f, pixelY - 5.0f, 0.4f, labelColor);
         }
 
+        ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
         glfwSwapBuffers(window);
-        glfwPollEvents();
     }
 
     glDeleteVertexArrays(1, &VAO);
@@ -409,6 +445,10 @@ int main() {
     glDeleteProgram(shaderProgram);
     glDeleteProgram(gridShaderProgram);
     glDeleteProgram(textShaderProgram);
+
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
 
     glfwDestroyWindow(window);
     glfwTerminate();
