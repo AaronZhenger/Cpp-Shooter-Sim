@@ -124,72 +124,6 @@ struct Character {
 };
 
 int main() {
-    DualRotor m_mechanism(0.2, 0.1, 40.0, 40.0, 3.1415/4, 0.85, 0.0, 0.0);
-    Projectile m_projectile(0.2, 1.0, 0.5, 0.2, 0.1, 0.03);
-    Fluid m_fluid(0.2);
-
-    const int seconds = 10;
-    const int hz = 50;
-    
-    std::vector<Position> rawPositions;
-    rawPositions.reserve(seconds * hz);
-    double startY = getPosY(m_projectile, m_fluid, m_mechanism, 0.0);
-
-    for (int i = 0; i < seconds * hz; i++) {
-        double t = i * (1.0 / hz);
-        Position current = {getPosX(m_projectile, m_fluid, m_mechanism, t), getPosY(m_projectile, m_fluid, m_mechanism, t)};
-
-        rawPositions.push_back(current);
-        if (i > 1 && current.y <= startY)
-            break;
-    }
-
-    double minX = rawPositions[0].x;
-    double maxX = rawPositions[0].x;
-    double minY = rawPositions[0].y;
-    double maxY = rawPositions[0].y;
-    for (const auto& p : rawPositions) {
-        minX = std::min(minX, p.x); maxX = std::max(maxX, p.x);
-        minY = std::min(minY, p.y); maxY = std::max(maxY, p.y);
-    }
-
-    double maxDimension = std::max({maxX - minX, maxY - minY, 0.00001});
-    double centerX = (minX + maxX) / 2.0;
-    double centerY = (minY + maxY) / 2.0;
-    double padding = maxDimension * 1.1 / 2.0;
-
-    minX = centerX - padding;
-    maxX = centerX + padding;
-    minY = centerY - padding;
-    maxY = centerY + padding;
-    
-    std::vector<Position> positions;
-    positions.reserve(rawPositions.size());
-    for (const auto& p : rawPositions) {
-        float normX = static_cast<float>(-1.0 + 2.0 * ((p.x - minX) / (maxX - minX)));
-        float normY = static_cast<float>(-0.25 + 1.25 * ((p.y - minY) / (maxY - minY)));
-        positions.push_back({normX, normY});
-    }
-
-    std::vector<Position> gridPositions;
-    std::vector<double> xLabels;
-    std::vector<double> yLabels;
-    double gridSpacing = maxDimension / 10.0;
-    
-    for (double x = std::floor(minX / gridSpacing) * gridSpacing; x <= maxX; x += gridSpacing) {
-        float normX = static_cast<float>(-1.0 + 2.0 * ((x - minX) / (maxX - minX)));
-        gridPositions.push_back({normX, -0.25});
-        gridPositions.push_back({normX, 1.0});
-        xLabels.push_back(x);
-    }
-
-    for (double y = std::floor(minY / gridSpacing) * gridSpacing + gridSpacing; y <= maxY; y += gridSpacing) {
-        float normY = static_cast<float>(-0.25 + 1.25 * ((y - minY) / (maxY - minY)));
-        gridPositions.push_back({-1.0, normY});
-        gridPositions.push_back({1.0, normY});
-        yLabels.push_back(y);
-    }
-
     glfwInit();
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
@@ -310,14 +244,14 @@ int main() {
     glGenVertexArrays(1, &VAO); glGenBuffers(1, &VBO);
     glBindVertexArray(VAO);
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, positions.size() * sizeof(Position), positions.data(), GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, 0, NULL, GL_DYNAMIC_DRAW);
     glVertexAttribPointer(0, 2, GL_DOUBLE, GL_FALSE, sizeof(Position), (void*)0);
     glEnableVertexAttribArray(0);
 
     glGenVertexArrays(1, &gridVAO); glGenBuffers(1, &gridVBO);
     glBindVertexArray(gridVAO);
     glBindBuffer(GL_ARRAY_BUFFER, gridVBO);
-    glBufferData(GL_ARRAY_BUFFER, gridPositions.size() * sizeof(Position), gridPositions.data(), GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, 0, NULL, GL_DYNAMIC_DRAW);
     glVertexAttribPointer(0, 2, GL_DOUBLE, GL_FALSE, sizeof(Position), (void*)0);
     glEnableVertexAttribArray(0);
 
@@ -379,9 +313,22 @@ int main() {
     };
 
     float labelColor[3] = { 0.8f, 0.8f, 0.8f };
-
-    const char* chr = "Label";
     double num = 1.0;
+    const int seconds = 10;
+    const int hz = 50;
+
+    std::vector<Position> rawPositions;
+    std::vector<Position> positions;
+    std::vector<Position> gridPositions;
+    std::vector<double> xLabels;
+    std::vector<double> yLabels;
+
+    static int currentMechanism = 0;
+    const char* mechanisms = "Dual Rotor\0Single Rotor\0Arm\0Slingshot\0Bounce";
+    
+    static int fluidPreset = 0;
+    const char* fluids = "None\0Air\0Water";
+    double fluidDensity = 0.0;
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
@@ -390,44 +337,161 @@ int main() {
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        ImGui::SetWindowPos(ImVec2(20.0, 400.0), ImGuiCond_FirstUseEver);
-        ImGui::SetWindowSize(ImVec2(300.0, 200.0), ImGuiCond_Always);
+        DualRotor m_mechanism(0.2, 0.1, 40.0, 40.0, 3.1415/4, 0.85, 0.0, 0.0);
+        Projectile m_projectile(0.2, 1.0, 0.5, 0.2, 0.1, 0.03);
+        Fluid m_fluid(fluidDensity);
 
         ImGui::Begin("Controls");
+        ImGui::SetWindowPos(ImVec2(20.0, 540.0), ImGuiCond_Always);
+        ImGui::SetWindowSize(ImVec2(240.0, 80.0), ImGuiCond_Always);
         ImGui::Text("FPS: %.0f", ImGui::GetIO().Framerate);
-        ImGui::Text("Label:");
+        ImGui::Text("Mechanism:");
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(100.0);
-        ImGui::InputDouble("##a", &num, 0.1, 1.0, "%.3f", 0);
+        ImGui::SetNextItemWidth(120.0);
+        ImGui::Combo("##mech", &currentMechanism, mechanisms);
         ImGui::End();
 
+        ImGui::Begin("Fluid");
+        ImGui::SetWindowPos(ImVec2(20.0, 630.0), ImGuiCond_Always);
+        ImGui::SetWindowSize(ImVec2(240.0, 80.0), ImGuiCond_Always);
+        if (fluidPreset == 0) {
+            ImGui::SetWindowSize(ImVec2(240.0, 100.0), ImGuiCond_Always);
+        }
+        ImGui::Text("Density Preset:");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(120.0);
+        ImGui::Combo("##preset", &fluidPreset, fluids);
+        if (fluidPreset == 0) {
+            ImGui::Text("Density:");
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(120.0);
+            ImGui::InputDouble("##density", &fluidDensity);
+        } 
+        else if (fluidPreset == 1)
+            fluidDensity = Fluid::air;
+        else fluidDensity = Fluid::water;
+        ImGui::Text("%.2f", fluidDensity);
+        ImGui::End();
+
+        rawPositions.clear();
+        positions.clear();
+        gridPositions.clear();
+        xLabels.clear();
+        yLabels.clear();
+
+        rawPositions.reserve(seconds * hz);
+        double startY = getPosY(m_projectile, m_fluid, m_mechanism, 0.0);
+
+        for (int i = 0; i < seconds * hz; i++) {
+            double t = i * (1.0 / hz);
+            Position current = {
+                getPosX(m_projectile, m_fluid, m_mechanism, t),
+                getPosY(m_projectile, m_fluid, m_mechanism, t)
+            };
+
+            rawPositions.push_back(current);
+            if (i > 1 && current.y <= startY)
+                break;
+        }
+
+        if (!rawPositions.empty()) {
+            double minX = rawPositions[0].x;
+            double maxX = rawPositions[0].x;
+            double minY = rawPositions[0].y;
+            double maxY = rawPositions[0].y;
+            for (const auto& p : rawPositions) {
+                minX = std::min(minX, p.x); maxX = std::max(maxX, p.x);
+                minY = std::min(minY, p.y); maxY = std::max(maxY, p.y);
+            }
+
+            double maxDimension = std::max({maxX - minX, maxY - minY, 0.00001});
+            double centerX = (minX + maxX) / 2.0;
+            double centerY = (minY + maxY) / 2.0;
+            double padding = maxDimension * 1.1 / 2.0;
+
+            minX = centerX - padding;
+            maxX = centerX + padding;
+            minY = centerY - padding;
+            maxY = centerY + padding;
+            
+            positions.reserve(rawPositions.size());
+            for (const auto& p : rawPositions) {
+                float normX = static_cast<float>(-1.0 + 2.0 * ((p.x - minX) / (maxX - minX)));
+                float normY = static_cast<float>(-0.25 + 1.25 * ((p.y - minY) / (maxY - minY)));
+                positions.push_back({normX, normY});
+            }
+
+            double gridSpacing = maxDimension / 10.0;
+            
+            for (double x = std::floor(minX / gridSpacing) * gridSpacing; x <= maxX; x += gridSpacing) {
+                float normX = static_cast<float>(-1.0 + 2.0 * ((x - minX) / (maxX - minX)));
+                gridPositions.push_back({normX, -0.25});
+                gridPositions.push_back({normX, 1.0});
+                xLabels.push_back(x);
+            }
+
+            for (double y = std::floor(minY / gridSpacing) * gridSpacing + gridSpacing; y <= maxY; y += gridSpacing) {
+                float normY = static_cast<float>(-0.25 + 1.25 * ((y - minY) / (maxY - minY)));
+                gridPositions.push_back({-1.0, normY});
+                gridPositions.push_back({1.0, normY});
+                yLabels.push_back(y);
+            }
+
+            glBindBuffer(GL_ARRAY_BUFFER, VBO);
+            glBufferData(GL_ARRAY_BUFFER, positions.size() * sizeof(Position), positions.data(), GL_DYNAMIC_DRAW);
+
+            glBindBuffer(GL_ARRAY_BUFFER, gridVBO);
+            glBufferData(GL_ARRAY_BUFFER, gridPositions.size() * sizeof(Position), gridPositions.data(), GL_DYNAMIC_DRAW);
+            glBindBuffer(GL_ARRAY_BUFFER, 0);
+        }
         glClearColor(0.07f, 0.13f, 0.17f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        glUseProgram(gridShaderProgram);
-        glBindVertexArray(gridVAO);
-        glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(gridPositions.size()));
+        if (!gridPositions.empty()) {
+            glUseProgram(gridShaderProgram);
+            glBindVertexArray(gridVAO);
+            glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(gridPositions.size()));
+        }
         
-        glUseProgram(shaderProgram);
-        glBindVertexArray(VAO);
-        glDrawArrays(GL_LINE_STRIP, 0, static_cast<GLsizei>(positions.size()));
-
-        for (double val : xLabels) {
-            float normX = static_cast<float>(-1.0 + 2.0 * ((val - minX) / (maxX - minX)));
-            float pixelX = (normX + 1.0f) / 2.0f * 800;
-
-            std::ostringstream ss;
-            ss << std::fixed << std::setprecision(1) << val;
-            renderText(ss.str(), pixelX - 12.0f, 280.0f, 0.4f, labelColor);
+        if (!positions.empty()) {
+            glUseProgram(shaderProgram);
+            glBindVertexArray(VAO);
+            glDrawArrays(GL_LINE_STRIP, 0, static_cast<GLsizei>(positions.size()));
         }
 
-        for (double val : yLabels) {
-            float normY = static_cast<float>(-0.25 + 1.25 * ((val - minY) / (maxY - minY)));
-            float pixelY = (normY + 1.0f) / 2.0f * 800;
+        if (!rawPositions.empty()) {
+            double minX = rawPositions[0].x;
+            double maxX = rawPositions[0].x;
+            double minY = rawPositions[0].y;
+            double maxY = rawPositions[0].y;
+            for (const auto& p : rawPositions) {
+                minX = std::min(minX, p.x); maxX = std::max(maxX, p.x);
+                minY = std::min(minY, p.y); maxY = std::max(maxY, p.y);
+            }
+            double maxDimension = std::max({maxX - minX, maxY - minY, 0.00001});
+            double centerX = (minX + maxX) / 2.0;
+            double centerY = (minY + maxY) / 2.0;
+            double padding = maxDimension * 1.1 / 2.0;
+            minX = centerX - padding; maxX = centerX + padding;
+            minY = centerY - padding; maxY = centerY + padding;
 
-            std::ostringstream ss;
-            ss << std::fixed << std::setprecision(1) << val;
-            renderText(ss.str(), 10.0f, pixelY - 5.0f, 0.4f, labelColor);
+            for (double val : xLabels) {
+                float normX = static_cast<float>(-1.0 + 2.0 * ((val - minX) / (maxX - minX)));
+                float pixelX = (normX + 1.0f) / 2.0f * 800;
+
+                std::ostringstream ss;
+                ss << std::fixed << std::setprecision(1) << val;
+                renderText(ss.str(), pixelX - 12.0f, 280.0f, 0.4f, labelColor);
+            }
+
+            for (double val : yLabels) {
+                float normY = static_cast<float>(-0.25 + 1.25 * ((val - minY) / (maxY - minY)));
+                float pixelY = (normY + 1.0f) / 2.0f * 800;
+
+                std::ostringstream ss;
+                ss << std::fixed << std::setprecision(1) << val;
+                renderText(ss.str(), 10.0f, pixelY - 5.0f, 0.4f, labelColor);
+            }
         }
 
         ImGui::Render();
