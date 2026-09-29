@@ -16,6 +16,7 @@
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_glfw.h"
 #include "imgui/imgui_impl_opengl3.h"
+#include "singlerotor.h"
 
 const char* vertexShaderSource = "#version 330 core\n"
 "layout (location = 0) in vec3 aPos;\n"
@@ -66,25 +67,27 @@ double getMagnusConstant(const Projectile& projectile, const Mechanism& mechanis
     return (projectile.magnusCoefficient * mechanism.getExitBackspin(projectile)) / projectile.mass;
 }
 
+constexpr double g = 9.8085;
+
 double getPosX(const Projectile& projectile, const Fluid& fluid, const Mechanism& mechanism, double time) {
     double omega = getMagnusConstant(projectile, mechanism);
     double k = getDragCoefficient(projectile, fluid) / projectile.mass;
 
-    double drift = omega * 9.8085 * time / (std::pow(k, 2) + std::pow(omega, 2));
+    if (k == 0.0 && omega == 0.0)
+        return mechanism.exitX + mechanism.getExitVelocity(projectile) * std::cos(mechanism.getExitAngle(projectile)) * time;
 
-    double a_x = (omega * mechanism.getExitVelocity(projectile) * sin(mechanism.getExitAngle(projectile))
-        - k * mechanism.getExitVelocity(projectile) * cos(mechanism.getExitAngle(projectile))
-        + (2 * k * omega * 9.8085) / (std::pow(k, 2) + std::pow(omega, 2))
-    ) / (std::pow(k, 2) + std::pow(omega, 2));
+    double denom = k * k + omega * omega;
+    double drift = omega * g * time / denom;
 
-    double a_y = (-omega * mechanism.getExitVelocity(projectile) * cos(mechanism.getExitAngle(projectile))
-        - k * mechanism.getExitVelocity(projectile) * sin(mechanism.getExitAngle(projectile))
-        - ((std::pow(k, 2) - std::pow(omega, 2)) * 9.8085) / (std::pow(k, 2) + std::pow(omega, 2))
-    ) / (std::pow(k, 2) + std::pow(omega, 2));
+    double v0 = mechanism.getExitVelocity(projectile);
+    double angle = mechanism.getExitAngle(projectile);
 
-    double curvature_1 = a_x * (std::exp(-k * time) * cos(omega * time) - 1);
-    double curvature_2 = a_y * (std::exp(-k * time) * sin(omega * time));
-    
+    double a_x = (omega * v0 * std::sin(angle) - k * v0 * std::cos(angle) + (2 * k * omega * g) / denom) / denom;
+    double a_y = (-omega * v0 * std::cos(angle) - k * v0 * std::sin(angle) - ((k * k - omega * omega) * g) / denom) / denom;
+
+    double curvature_1 = a_x * (std::exp(-k * time) * std::cos(omega * time) - 1.0);
+    double curvature_2 = a_y * (std::exp(-k * time) * std::sin(omega * time));
+
     return mechanism.exitX + drift + curvature_1 - curvature_2;
 }
 
@@ -330,6 +333,17 @@ int main() {
     const char* fluids = "None\0Air\0Water";
     double fluidDensity = 0.0;
 
+    double efficiency = 0.0;
+    double initialX = 0.0;
+    double initialY = 0.0;
+
+    double p_mass = 0.2;
+    double p_rotInertia = 1.0;
+    double p_area = 0.5;
+    double p_radius = 0.2;
+    double p_dragC = 0.47;
+    double p_magnusC = 0.03;
+
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
 
@@ -337,41 +351,127 @@ int main() {
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        DualRotor m_mechanism(0.2, 0.1, 40.0, 40.0, 3.1415/4, 0.85, 0.0, 0.0);
-        Projectile m_projectile(0.2, 1.0, 0.5, 0.2, 0.1, 0.03);
+        std::unique_ptr<Mechanism> m_mechanism;
+
+        Projectile m_projectile(p_mass, p_rotInertia, p_area, p_radius, p_dragC, p_magnusC);
         Fluid m_fluid(fluidDensity);
 
         ImGui::Begin("Controls");
-        ImGui::SetWindowPos(ImVec2(20.0, 540.0), ImGuiCond_Always);
+        ImGui::SetWindowPos(ImVec2(50.0, 20.0), ImGuiCond_Always);
         ImGui::SetWindowSize(ImVec2(240.0, 80.0), ImGuiCond_Always);
         ImGui::Text("FPS: %.0f", ImGui::GetIO().Framerate);
-        ImGui::Text("Mechanism:");
+        ImGui::Text("Mechanism:   ");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(120.0);
         ImGui::Combo("##mech", &currentMechanism, mechanisms);
         ImGui::End();
 
         ImGui::Begin("Fluid");
-        ImGui::SetWindowPos(ImVec2(20.0, 630.0), ImGuiCond_Always);
-        ImGui::SetWindowSize(ImVec2(240.0, 80.0), ImGuiCond_Always);
-        if (fluidPreset == 0) {
-            ImGui::SetWindowSize(ImVec2(240.0, 100.0), ImGuiCond_Always);
-        }
-        ImGui::Text("Density Preset:");
+        ImGui::SetWindowPos(ImVec2(20.0, 540.0), ImGuiCond_Always);
+        ImGui::SetWindowSize(ImVec2(240.0, 60.0), ImGuiCond_Always);
+        if (fluidPreset == 0)
+            ImGui::SetWindowSize(ImVec2(240.0, 80.0), ImGuiCond_Always);
+        ImGui::Text("Density Preset:    ");
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(120.0);
+        ImGui::SetNextItemWidth(80.0);
         ImGui::Combo("##preset", &fluidPreset, fluids);
         if (fluidPreset == 0) {
-            ImGui::Text("Density:");
+            ImGui::Text("Density:           ");
             ImGui::SameLine();
-            ImGui::SetNextItemWidth(120.0);
+            ImGui::SetNextItemWidth(80.0);
             ImGui::InputDouble("##density", &fluidDensity);
         } 
         else if (fluidPreset == 1)
             fluidDensity = Fluid::air;
         else fluidDensity = Fluid::water;
-        ImGui::Text("%.2f", fluidDensity);
         ImGui::End();
+
+        ImGui::Begin("Mechanism");
+        ImGui::SetWindowPos(ImVec2(20.0, 610.0), ImGuiCond_Always);
+        if (fluidPreset == 0)
+            ImGui::SetWindowPos(ImVec2(20.0, 630.0), ImGuiCond_Always);
+        ImGui::SetWindowSize(ImVec2(240.0, 100.0), ImGuiCond_Always);
+        ImGui::Text("Efficiency:        ");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(80.0);
+        ImGui::InputDouble("##eff", &efficiency);
+        ImGui::Text("Initial X:         ");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(80.0);
+        ImGui::InputDouble("##x", &initialX);
+        ImGui::Text("Initial Y:         ");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(80.0);
+        ImGui::InputDouble("##y", &initialY);
+        ImGui::End();
+
+        ImGui::Begin("Projectile");
+        ImGui::SetWindowPos(ImVec2(540.0, 540.0), ImGuiCond_Always);
+        ImGui::SetWindowSize(ImVec2(240.0, 190.0), ImGuiCond_Always);
+        ImGui::Text("Mass:              ");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(80.0);
+        ImGui::InputDouble("##m", &p_mass);
+        ImGui::Text("Rotational Inertia:");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(80.0);
+        ImGui::InputDouble("##RI", &p_rotInertia);
+        ImGui::Text("Cross Sectional");
+        ImGui::Text("Area:              ");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(80.0);
+        ImGui::InputDouble("##CSA", &p_area);
+        ImGui::Text("Radius:            ");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(80.0);
+        ImGui::InputDouble("##r", &p_radius);
+        ImGui::Text("Drag Coefficient:  ");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(80.0);
+        ImGui::InputDouble("##dc", &p_dragC);
+        ImGui::Text("Magnus Coefficient:");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(80.0);
+        ImGui::InputDouble("##mc", &p_magnusC);
+        ImGui::End();
+
+        switch (currentMechanism) {
+            case 0 :
+                ImGui::Begin("Dual Rotor");
+                ImGui::SetWindowPos(ImVec2(540.0, 540.0), ImGuiCond_Always);
+                ImGui::SetWindowSize(ImVec2(240.0, 190.0), ImGuiCond_Always);
+                ImGui::Text("Mass:              ");
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(80.0);
+                ImGui::InputDouble("##m", &p_mass);
+                ImGui::Text("Rotational Inertia:");
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(80.0);
+                ImGui::InputDouble("##RI", &p_rotInertia);
+                ImGui::Text("Cross Sectional");
+                ImGui::Text("Area:              ");
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(80.0);
+                ImGui::InputDouble("##CSA", &p_area);
+                ImGui::Text("Radius:            ");
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(80.0);
+                ImGui::InputDouble("##r", &p_radius);
+                ImGui::Text("Drag Coefficient:  ");
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(80.0);
+                ImGui::InputDouble("##dc", &p_dragC);
+                ImGui::Text("Magnus Coefficient:");
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(80.0);
+                ImGui::InputDouble("##mc", &p_magnusC);
+                ImGui::End();
+                m_mechanism = std::make_unique<DualRotor>(0.2, 0.1, 40.0, 40.0, 3.1415/4, 0.85, initialX, initialY);
+                break;
+            case 1 :
+                m_mechanism = std::make_unique<SingleRotor>(0.2, 40.0, 3.1415/4, 0.85, initialX, initialY);
+                break;
+        }
 
         rawPositions.clear();
         positions.clear();
@@ -380,13 +480,13 @@ int main() {
         yLabels.clear();
 
         rawPositions.reserve(seconds * hz);
-        double startY = getPosY(m_projectile, m_fluid, m_mechanism, 0.0);
+        double startY = getPosY(m_projectile, m_fluid, *m_mechanism, 0.0);
 
         for (int i = 0; i < seconds * hz; i++) {
             double t = i * (1.0 / hz);
             Position current = {
-                getPosX(m_projectile, m_fluid, m_mechanism, t),
-                getPosY(m_projectile, m_fluid, m_mechanism, t)
+                getPosX(m_projectile, m_fluid, *m_mechanism, t),
+                getPosY(m_projectile, m_fluid, *m_mechanism, t)
             };
 
             rawPositions.push_back(current);

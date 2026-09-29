@@ -12,9 +12,9 @@ class Projectile {
         double magnusCoefficient;
         double radius;
         double dragCoefficient;
-        const double SPHERE_DRAG_COEFFICIENT = 0.47;
-        const double CUBE_DRAG_COEFFICIENT = 1.05;
-        const double FLAT_DRAG_COEFFICIENT = 1.28;
-        const double BULLET_DRAG_COEFFICIENT = 0.30;
-        const double CAR_DRAG_COEFFICIENT = 0.3;
+        static constexpr double SPHERE_DRAG_COEFFICIENT = 0.47;
+        static constexpr double CUBE_DRAG_COEFFICIENT = 1.05;
+        static constexpr double FLAT_DRAG_COEFFICIENT = 1.28;
+        static constexpr double BULLET_DRAG_COEFFICIENT = 0.30;
+        static constexpr double CAR_DRAG_COEFFICIENT = 0.3;
 };
