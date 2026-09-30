@@ -13,7 +13,7 @@ double Arm::getExitVelocity(const Projectile& projectile) const {
 }
 
 double Arm::getExitAngle(const Projectile& projectile) const {
-    return pointOfReleaseRadians + 3.14159265358979323846 / 2.0;
+    return pointOfReleaseRadians;
 }
 
 double Arm::getExitBackspin(const Projectile& projectile) const {
