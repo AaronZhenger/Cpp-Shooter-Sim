@@ -9,13 +9,17 @@
 #include <map>
 #include <sstream>
 #include <iomanip>
+#include <memory>
+#include <algorithm>
+
+#include "imgui/imgui.h"
+#include "imgui/imgui_impl_glfw.h"
+#include "imgui/imgui_impl_opengl3.h"
+
 #include "projectile.h"
 #include "mechanism.h"
 #include "fluid.h"
 #include "dualrotor.h"
-#include "imgui/imgui.h"
-#include "imgui/imgui_impl_glfw.h"
-#include "imgui/imgui_impl_opengl3.h"
 #include "singlerotor.h"
 #include "arm.h"
 #include "slingshot.h"
@@ -26,6 +30,7 @@ const char* vertexShaderSource = "#version 330 core\n"
 "void main()\n"
 "{\n"
 "   gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);\n"
+"   gl_PointSize = 8.0;\n"
 "}\0";
 
 const char* fragmentShaderSource = "#version 330 core\n"
@@ -140,7 +145,6 @@ int main() {
 
     GLFWwindow* window = glfwCreateWindow(800, 800, "Projectile Simulator", NULL, NULL);
     if (window == NULL) {
-        std::cout << "Window failed to Launch\n";
         glfwTerminate();
         return -1;
     }
@@ -149,26 +153,20 @@ int main() {
     glViewport(0, 0, 800, 800);
 
     FT_Library ft;
-    if (FT_Init_FreeType(&ft)) {
-        std::cerr << "no lib" << std::endl;
+    if (FT_Init_FreeType(&ft))
         return -1;
-    }
 
     FT_Face face;
-    if (FT_New_Face(ft, "src/fonts/ArialBold.ttf", 0, &face)) {
-        std::cerr << "no font" << std::endl;  
+    if (FT_New_Face(ft, "src/fonts/ArialBold.ttf", 0, &face))
         return -1;
-    }
 
     FT_Set_Pixel_Sizes(face, 0, 48);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
     std::map<char, Character> characters;
     for (unsigned char c = 0; c < 128; c++) {
-        if (FT_Load_Char(face, c, FT_LOAD_RENDER)) {
-            std::cerr << "no glyph" << c << std::endl;
+        if (FT_Load_Char(face, c, FT_LOAD_RENDER))
             continue;
-        }
 
         GLuint texture;
         glGenTextures(1, &texture);
@@ -322,7 +320,6 @@ int main() {
     };
 
     float labelColor[3] = { 0.8f, 0.8f, 0.8f };
-    double num = 1.0;
     const int seconds = 10;
     const int hz = 200;
 
@@ -334,16 +331,21 @@ int main() {
 
     static int currentMechanism = 0;
     const char* mechanisms = "Dual Rotor\0Single Rotor\0Arm\0Slingshot\0Bounce";
+
+    static int currentMode = 0;
+    const char* modes = "Horizontal\0Raw Time\0Prediction";
     
     static int fluidPreset = 0;
     const char* fluids = "None\0Air\0Water";
     double fluidDensity = 0.0;
 
+    double time = 1.0;
+
     double efficiency = 0.85;
     double initialX = 0.0;
     double initialY = 0.0;
 
-    double p_mass = 0.2;
+    double p_mass = 0.8;
     double p_rotInertia = 1.0;
     double p_area = 0.5;
     double p_radius = 0.2;
@@ -373,8 +375,22 @@ int main() {
     double b_v = 10.0;
     double b_phi = -3.14/4;
 
+    double lastFrameTime = glfwGetTime();
+    float animTime = 0.0f;
+    bool isPlaying = true;
+    float playbackSpeed = 1.0f;
+    bool loopAnimation = true;
+
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
+
+        double currentFrameTime = glfwGetTime();
+        double deltaTime = currentFrameTime - lastFrameTime;
+        lastFrameTime = currentFrameTime;
+
+        if (isPlaying) {
+            animTime += static_cast<float>(deltaTime) * playbackSpeed;
+        }
 
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
@@ -382,17 +398,45 @@ int main() {
 
         std::unique_ptr<Mechanism> m_mechanism;
 
-        Projectile m_projectile(p_mass, p_rotInertia, p_area, p_radius, p_dragC, p_magnusC);
+        Projectile m_projectile(p_mass, p_rotInertia, p_area, p_radius, p_dragC, p_magnusC * .1);
         Fluid m_fluid(fluidDensity);
 
+        int prevMech = currentMechanism;
+        int prevMode = currentMode;
+
         ImGui::Begin("Controls");
-        ImGui::SetWindowPos(ImVec2(50.0, 20.0), ImGuiCond_Always);
-        ImGui::SetWindowSize(ImVec2(240.0, 80.0), ImGuiCond_Always);
+        ImGui::SetWindowPos(ImVec2(50.0, 20.0), ImGuiCond_FirstUseEver);
+        ImGui::SetWindowSize(ImVec2(240.0, 170.0), ImGuiCond_Always);
+        if (currentMode == 0)
+            ImGui::SetWindowSize(ImVec2(240.0, 150.0), ImGuiCond_Always);
         ImGui::Text("FPS: %.0f", ImGui::GetIO().Framerate);
+        ImGui::Text("Mode:        ");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(120.0);
+        ImGui::Combo("##mode", &currentMode, modes);
         ImGui::Text("Mechanism:   ");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(120.0);
         ImGui::Combo("##mech", &currentMechanism, mechanisms);
+        if (currentMode == 1) {
+            ImGui::Text("Flight Time: ");
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(120.0);
+            ImGui::InputDouble("##time", &time);
+        }
+
+        ImGui::Separator();
+        if (ImGui::Button(isPlaying ? "Pause" : "Play")) isPlaying = !isPlaying;
+        ImGui::SameLine();
+        if (ImGui::Button("Reset")) animTime = 0.0f;
+        ImGui::SameLine();
+        ImGui::Checkbox("Loop", &loopAnimation);
+        ImGui::SetNextItemWidth(120.0);
+        ImGui::SliderFloat("Speed", &playbackSpeed, 0.1f, 5.0f);
+
+        if (prevMech != currentMechanism || prevMode != currentMode) {
+            animTime = 0.0f;
+        }
         ImGui::End();
 
         ImGui::Begin("Fluid");
@@ -499,7 +543,7 @@ int main() {
             case 1 :
                 ImGui::Begin("Single Rotor");
                 ImGui::SetWindowPos(ImVec2(280.0, 540.0), ImGuiCond_Always);
-                ImGui::SetWindowSize(ImVec2(240.0, 100.0), ImGuiCond_Always);
+                ImGui::SetWindowSize(ImVec2(240.0, 120.0), ImGuiCond_Always);
                 ImGui::Text("Flywheel Radius:   ");
                 ImGui::SameLine();
                 ImGui::SetNextItemWidth(80.0);
@@ -519,7 +563,7 @@ int main() {
             case 2 :
                 ImGui::Begin("Arm");
                 ImGui::SetWindowPos(ImVec2(280.0, 540.0), ImGuiCond_Always);
-                ImGui::SetWindowSize(ImVec2(240.0, 120.0), ImGuiCond_Always);
+                ImGui::SetWindowSize(ImVec2(240.0, 110.0), ImGuiCond_Always);
                 ImGui::Text("Radius:            ");
                 ImGui::SameLine();
                 ImGui::SetNextItemWidth(80.0);
@@ -590,7 +634,11 @@ int main() {
         rawPositions.reserve(seconds * hz);
         double startY = getPosY(m_projectile, m_fluid, *m_mechanism, 0.0);
 
-        for (int i = 0; i < seconds * hz; i++) {
+        double iterations = time * hz;
+        if (currentMode == 0)
+            iterations = seconds * hz;
+
+        for (int i = 0; i < iterations; i++) {
             double t = i * (1.0 / hz);
             Position current = {
                 getPosX(m_projectile, m_fluid, *m_mechanism, t),
@@ -598,8 +646,19 @@ int main() {
             };
 
             rawPositions.push_back(current);
-            if (i > 1 && current.y <= startY)
+
+            if (currentMode == 0 && i > 1 && current.y <= startY)
                 break;
+        }
+
+        double totalFlightDuration = rawPositions.size() / static_cast<double>(hz);
+        if (animTime > totalFlightDuration) {
+            if (loopAnimation) {
+                animTime = 0.0f;
+            } else {
+                animTime = static_cast<float>(totalFlightDuration);
+                isPlaying = false;
+            }
         }
 
         if (!rawPositions.empty()) {
@@ -662,9 +721,19 @@ int main() {
         }
         
         if (!positions.empty()) {
+            size_t visibleCount = std::min(positions.size(), static_cast<size_t>(animTime * hz));
+
             glUseProgram(shaderProgram);
             glBindVertexArray(VAO);
-            glDrawArrays(GL_LINE_STRIP, 0, static_cast<GLsizei>(positions.size()));
+
+            if (visibleCount > 1) {
+                glDrawArrays(GL_LINE_STRIP, 0, static_cast<GLsizei>(visibleCount));
+            }
+
+            if (visibleCount > 0) {
+                glEnable(GL_PROGRAM_POINT_SIZE);
+                glDrawArrays(GL_POINTS, static_cast<GLsizei>(visibleCount - 1), 1);
+            }
         }
 
         if (!rawPositions.empty()) {
