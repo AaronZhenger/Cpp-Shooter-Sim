@@ -330,14 +330,27 @@ int main() {
     std::vector<double> yLabels;
 
     static int currentMechanism = 0;
-    const char* mechanisms = "Dual Rotor\0Single Rotor\0Arm\0Slingshot\0Bounce";
+    const char* mechanisms = "Dual Rotor\0Single Rotor\0Arm\0Slingshot\0Bounce\0";
 
     static int currentMode = 0;
-    const char* modes = "Horizontal\0Raw Time\0Prediction";
+    const char* modes = "Horizontal\0Raw Time\0Prediction\0";
     
-    static int fluidPreset = 0;
-    const char* fluids = "None\0Air\0Water";
+    static int fluidPreset = 1;
+    const char* fluids = "None\0Air\0Water\0";
     double fluidDensity = 0.0;
+
+    static int predictionMode = 0;
+    const char * predictionModes = "Time\0Distance\0Clearance\0";
+
+    double minAngle = 0;
+    double maxAngle = 60.0;
+    double minVel = 0;
+    double maxVel = 40.0;
+
+    double f_x = 5.0;
+    double f_y = 0.0;
+    double o_x = 4.0;
+    double o_y = 2.0;
 
     double time = 1.0;
 
@@ -356,7 +369,7 @@ int main() {
     double d_tfr = 0.1;
     double d_bfav = 40.0;
     double d_tfav = 40.0;
-    double d_ra = 3.14/4;
+    double d_ra = 45;
 
     double s_fr = 0.2;
     double s_fav = 40.0;
@@ -364,16 +377,16 @@ int main() {
 
     double a_r = 0.5;
     double a_av = 6.0;
-    double a_ra = 3.14/4;
+    double a_ra = 45;
 
     double ss_x = 0.5;
     double ss_e = 40.0;
     double ss_m = .2;
-    double ss_ra = 3.14/4;
+    double ss_ra = 45;
 
     double b_theta = 0.0;
     double b_v = 10.0;
-    double b_phi = -3.14/4;
+    double b_phi = -45;
 
     double lastFrameTime = glfwGetTime();
     float animTime = 0.0f;
@@ -405,10 +418,10 @@ int main() {
         int prevMode = currentMode;
 
         ImGui::Begin("Controls");
-        ImGui::SetWindowPos(ImVec2(50.0, 20.0), ImGuiCond_FirstUseEver);
-        ImGui::SetWindowSize(ImVec2(240.0, 170.0), ImGuiCond_Always);
-        if (currentMode == 0)
-            ImGui::SetWindowSize(ImVec2(240.0, 150.0), ImGuiCond_Always);
+        ImGui::SetWindowPos(ImVec2(50.0, 20.0), ImGuiCond_Once);
+        ImGui::SetWindowSize(ImVec2(240.0, 150.0), ImGuiCond_Always);
+        if (currentMode == 1)
+            ImGui::SetWindowSize(ImVec2(240.0, 170.0), ImGuiCond_Always);
         ImGui::Text("FPS: %.0f", ImGui::GetIO().Framerate);
         ImGui::Text("Mode:        ");
         ImGui::SameLine();
@@ -424,7 +437,6 @@ int main() {
             ImGui::SetNextItemWidth(120.0);
             ImGui::InputDouble("##time", &time);
         }
-
         ImGui::Separator();
         if (ImGui::Button(isPlaying ? "Pause" : "Play")) isPlaying = !isPlaying;
         ImGui::SameLine();
@@ -438,6 +450,52 @@ int main() {
             animTime = 0.0f;
         }
         ImGui::End();
+
+        if (currentMode == 2) {
+            ImGui::Begin("Predictions");
+            ImGui::SetWindowPos(ImVec2(540.0, 20.0), ImGuiCond_Once);
+            ImGui::SetWindowSize(ImVec2(240.0, 200.0), ImGuiCond_Always);
+            if (predictionMode == 2) {
+                ImGui::SetWindowSize(ImVec2(240.0, 245.0), ImGuiCond_Always);
+            }
+            ImGui::Separator();
+            ImGui::Combo("##pm", &predictionMode, predictionModes);
+            ImGui::Text("Min Angle:   ");
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(120.0);
+            ImGui::InputDouble("##mina", &minAngle);
+            ImGui::Text("Max Angle:   ");
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(120.0);
+            ImGui::InputDouble("##maxa", &maxAngle);
+            ImGui::Text("Min Velocity:");
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(120.0);
+            ImGui::InputDouble("##minv", &minVel);
+            ImGui::Text("Max Velocity:");
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(120.0);
+            ImGui::InputDouble("##maxv", &maxVel);
+            ImGui::Text("Final X:     ");
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(120.0);
+            ImGui::InputDouble("##fx", &f_x);
+            ImGui::Text("Final Y:     ");
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(120.0);
+            ImGui::InputDouble("##fy", &f_y);
+            if (predictionMode == 2) {
+                ImGui::Text("Obstacle X:  ");
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(120.0);
+                ImGui::InputDouble("##ox", &o_x);
+                ImGui::Text("Obstacle Y:  ");
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(120.0);
+                ImGui::InputDouble("##oy", &o_y);
+            }
+            ImGui::End();
+        }
 
         ImGui::Begin("Fluid");
         ImGui::SetWindowPos(ImVec2(20.0, 540.0), ImGuiCond_Always);
@@ -463,11 +521,12 @@ int main() {
         ImGui::SetWindowPos(ImVec2(20.0, 610.0), ImGuiCond_Always);
         if (fluidPreset == 0)
             ImGui::SetWindowPos(ImVec2(20.0, 630.0), ImGuiCond_Always);
-        ImGui::SetWindowSize(ImVec2(240.0, 100.0), ImGuiCond_Always);
+        ImGui::SetWindowSize(ImVec2(240.0, 107.0), ImGuiCond_Always);
         ImGui::Text("Efficiency:        ");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(80.0);
         ImGui::InputDouble("##eff", &efficiency);
+        ImGui::Separator();
         ImGui::Text("Initial X:         ");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(80.0);
@@ -480,7 +539,7 @@ int main() {
 
         ImGui::Begin("Projectile");
         ImGui::SetWindowPos(ImVec2(540.0, 540.0), ImGuiCond_Always);
-        ImGui::SetWindowSize(ImVec2(240.0, 190.0), ImGuiCond_Always);
+        ImGui::SetWindowSize(ImVec2(240.0, 193.0), ImGuiCond_Always);
         ImGui::Text("Mass:              ");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(80.0);
@@ -498,6 +557,7 @@ int main() {
         ImGui::SameLine();
         ImGui::SetNextItemWidth(80.0);
         ImGui::InputDouble("##r", &p_radius);
+        ImGui::Separator();
         ImGui::Text("Drag Coefficient:  ");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(80.0);
@@ -533,17 +593,18 @@ int main() {
                 ImGui::SameLine();
                 ImGui::SetNextItemWidth(80.0);
                 ImGui::InputDouble("##tfav", &d_tfav);
+                ImGui::Separator();
                 ImGui::Text("Release Angle:     ");
                 ImGui::SameLine();
                 ImGui::SetNextItemWidth(80.0);
                 ImGui::InputDouble("##ra", &d_ra);
                 ImGui::End();
-                m_mechanism = std::make_unique<DualRotor>(d_bfr, d_tfr, d_bfav, d_tfav, d_ra, efficiency, initialX, initialY);
+                m_mechanism = std::make_unique<DualRotor>(d_bfr, d_tfr, d_bfav, d_tfav, d_ra * 3.1415 / 180.0, efficiency, initialX, initialY);
                 break;
             case 1 :
                 ImGui::Begin("Single Rotor");
                 ImGui::SetWindowPos(ImVec2(280.0, 540.0), ImGuiCond_Always);
-                ImGui::SetWindowSize(ImVec2(240.0, 120.0), ImGuiCond_Always);
+                ImGui::SetWindowSize(ImVec2(240.0, 123.0), ImGuiCond_Always);
                 ImGui::Text("Flywheel Radius:   ");
                 ImGui::SameLine();
                 ImGui::SetNextItemWidth(80.0);
@@ -553,17 +614,18 @@ int main() {
                 ImGui::SameLine();
                 ImGui::SetNextItemWidth(80.0);
                 ImGui::InputDouble("##fav", &s_fav);
+                ImGui::Separator();
                 ImGui::Text("Release Angle:     ");
                 ImGui::SameLine();
                 ImGui::SetNextItemWidth(80.0);
                 ImGui::InputDouble("##ra", &s_ra);
                 ImGui::End();
-                m_mechanism = std::make_unique<SingleRotor>(s_fr, s_fav, s_ra, efficiency, initialX, initialY);
+                m_mechanism = std::make_unique<SingleRotor>(s_fr, s_fav, s_ra * 3.1415 / 180.0, efficiency, initialX, initialY);
                 break;
             case 2 :
                 ImGui::Begin("Arm");
                 ImGui::SetWindowPos(ImVec2(280.0, 540.0), ImGuiCond_Always);
-                ImGui::SetWindowSize(ImVec2(240.0, 110.0), ImGuiCond_Always);
+                ImGui::SetWindowSize(ImVec2(240.0, 109.0), ImGuiCond_Always);
                 ImGui::Text("Radius:            ");
                 ImGui::SameLine();
                 ImGui::SetNextItemWidth(80.0);
@@ -572,12 +634,13 @@ int main() {
                 ImGui::SameLine();
                 ImGui::SetNextItemWidth(80.0);
                 ImGui::InputDouble("##av", &a_av);
+                ImGui::Separator();
                 ImGui::Text("Release Angle:     ");
                 ImGui::SameLine();
                 ImGui::SetNextItemWidth(80.0);
                 ImGui::InputDouble("##ra", &a_ra);
                 ImGui::End();
-                m_mechanism = std::make_unique<Arm>(a_r, a_av, a_ra, efficiency, initialX, initialY);
+                m_mechanism = std::make_unique<Arm>(a_r, a_av, a_ra * 3.1415 / 180.0, efficiency, initialX, initialY);
                 break;
             case 3 :
                 ImGui::Begin("Slingshot");
@@ -595,17 +658,18 @@ int main() {
                 ImGui::SameLine();
                 ImGui::SetNextItemWidth(80.0);
                 ImGui::InputDouble("##m", &ss_m);
+                ImGui::Separator();
                 ImGui::Text("Release Angle:     ");
                 ImGui::SameLine();
                 ImGui::SetNextItemWidth(80.0);
                 ImGui::InputDouble("##ra", &ss_ra);
                 ImGui::End();
-                m_mechanism = std::make_unique<SlingShot>(ss_x, ss_e, ss_m, ss_ra, efficiency, initialX, initialY);
+                m_mechanism = std::make_unique<SlingShot>(ss_x, ss_e, ss_m, ss_ra * 3.1415 / 180.0, efficiency, initialX, initialY);
                 break;
             case 4 :
                 ImGui::Begin("Bounce");
                 ImGui::SetWindowPos(ImVec2(280.0, 540.0), ImGuiCond_Always);
-                ImGui::SetWindowSize(ImVec2(240.0, 120.0), ImGuiCond_Always);
+                ImGui::SetWindowSize(ImVec2(240.0, 125.0), ImGuiCond_Always);
                 ImGui::Text("Surface Angle      ");
                 ImGui::Text("Offset:            ");
                 ImGui::SameLine();
@@ -615,13 +679,14 @@ int main() {
                 ImGui::SameLine();
                 ImGui::SetNextItemWidth(80.0);
                 ImGui::InputDouble("##v", &b_v);
+                ImGui::Separator();
                 ImGui::Text("Angle Of Incidence:");
                 ImGui::SameLine();
                 ImGui::SetNextItemWidth(80.0);
                 ImGui::InputDouble("##p", &b_phi);
 
                 ImGui::End();
-                m_mechanism = std::make_unique<Bounce>(b_theta, b_v, b_phi, efficiency, initialX, initialY);
+                m_mechanism = std::make_unique<Bounce>(b_theta * 3.1415 / 180.0, b_v, b_phi * 3.1415 / 180.0, efficiency, initialX, initialY);
                 break;
         }
 
