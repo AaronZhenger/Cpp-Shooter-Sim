@@ -124,6 +124,73 @@ double getPosY(const Projectile& projectile, const Fluid& fluid, const Mechanism
     return mechanism.exitY - drift + curvature_1 + curvature_2;
 }
 
+double getPosX(const Projectile& projectile, const Fluid& fluid, double v0, double angle, double omega, double exitX, double time) {
+    double k = getDragCoefficient(projectile, fluid) / projectile.mass;
+
+    if (k == 0.0 && omega == 0.0)
+        return exitX + v0 * std::cos(angle) * time;
+
+    double denom = k * k + omega * omega;
+    double drift = omega * g * time / denom;
+
+    double a_x = (omega * v0 * std::sin(angle) - k * v0 * std::cos(angle) + (2 * k * omega * g) / denom) / denom;
+    double a_y = (-omega * v0 * std::cos(angle) - k * v0 * std::sin(angle) - ((k * k - omega * omega) * g) / denom) / denom;
+
+    double curvature_1 = a_x * (std::exp(-k * time) * std::cos(omega * time) - 1.0);
+    double curvature_2 = a_y * (std::exp(-k * time) * std::sin(omega * time));
+
+    return exitX + drift + curvature_1 - curvature_2;
+}
+
+double getPosY(const Projectile& projectile, const Fluid& fluid, double v0, double angle, double omega, double exitY, double time) {
+    double k = getDragCoefficient(projectile, fluid) / projectile.mass;
+    
+    if (k == 0.0 && omega == 0.0) {
+        return exitY + v0 * std::sin(angle) * time - 0.5 * g * time * time;
+    }
+    
+    double denom = std::pow(k, 2) + std::pow(omega, 2);
+    double drift = k * g * time / denom;
+
+    double a_x = (omega * v0 * std::sin(angle) - k * v0 * std::cos(angle) + (2 * k * omega * g) / denom) / denom;
+    double a_y = (-omega * v0 * std::cos(angle) - k * v0 * std::sin(angle) - ((std::pow(k, 2) - std::pow(omega, 2)) * g) / denom) / denom;
+
+    double curvature_1 = a_y * (std::exp(-k * time) * std::cos(omega * time) - 1.0);
+    double curvature_2 = a_x * (std::exp(-k * time) * std::sin(omega * time));
+    
+    return exitY - drift + curvature_1 + curvature_2;
+}
+
+double findTime(const Projectile& projectile, const Fluid& fluid, double v0, double angle, double omega, double exitX, double targetX) {
+    double t = 0.5;
+    for (int iter = 0; iter < 12; ++iter) {
+        double x = getPosX(projectile, fluid, v0, angle, omega, exitX, t);
+        double diff = x - targetX;
+        if (std::abs(diff) < 1e-4) break;
+
+        double dt = 1e-5;
+        double dxdt = (getPosX(projectile, fluid, v0, angle, omega, exitX, t + dt) - x) / dt;
+        if (std::abs(dxdt) < 1e-6) break;
+
+        t -= diff / dxdt;
+        if (t <= 0.0) t = 0.001;
+    }
+    return t;
+}
+
+struct SimpleConfig {
+    public:
+        SimpleConfig(double theta, double v) : theta(theta), v(v) {};
+    double theta, v;
+};
+
+struct DetailedConfig {
+    public:
+        DetailedConfig(SimpleConfig config, double t, double d) : config(config), t(t), d(d) {};
+    SimpleConfig config;
+    double t, d;
+};
+
 struct Position {
     public:
         Position(double x, double y) : x(x), y(y) {};
@@ -329,6 +396,9 @@ int main() {
     std::vector<double> xLabels;
     std::vector<double> yLabels;
 
+    std::vector<SimpleConfig> simpleConfigs;
+    std::vector<DetailedConfig> advConfigs;
+
     static int currentMechanism = 0;
     const char* mechanisms = "Dual Rotor\0Single Rotor\0Arm\0Slingshot\0Bounce\0";
 
@@ -387,6 +457,9 @@ int main() {
     double b_theta = 0.0;
     double b_v = 10.0;
     double b_phi = -45;
+
+    double predictionVelocity;
+    double predictionAngle;
 
     double lastFrameTime = glfwGetTime();
     float animTime = 0.0f;
@@ -696,6 +769,24 @@ int main() {
         xLabels.clear();
         yLabels.clear();
 
+        simpleConfigs.clear();
+        advConfigs.clear();
+
+        for (int a = minAngle; a <= maxAngle; a+=0.1) {
+            for (int v = minVel; v <= maxVel; v+=0.02) {
+                for (int t = 0; t < 2; t+=0.005) {
+                    if (predictionMode == 2) {
+
+                    } else {
+                        if (std::abs(getPosX(m_projectile, m_fluid, predictionVelocity, predictionAngle, getMagnusConstant(m_projectile, *m_mechanism), m_mechanism.get()->exitX, t)-f_x) < 0.01
+                            && std::abs(getPosY(m_projectile, m_fluid, predictionVelocity, predictionAngle, getMagnusConstant(m_projectile, *m_mechanism), m_mechanism.get()->exitY, t)-f_y) < 0.01) {
+                    
+                        }
+                    }
+                }
+            }
+        }
+
         rawPositions.reserve(seconds * hz);
         double startY = getPosY(m_projectile, m_fluid, *m_mechanism, 0.0);
 
@@ -709,6 +800,13 @@ int main() {
                 getPosX(m_projectile, m_fluid, *m_mechanism, t),
                 getPosY(m_projectile, m_fluid, *m_mechanism, t)
             };
+
+            if (currentMode == 2) {
+                current = {
+                    getPosX(m_projectile, m_fluid, predictionVelocity, predictionAngle, getMagnusConstant(m_projectile, *m_mechanism), m_mechanism.get()->exitX, t),
+                    getPosY(m_projectile, m_fluid, predictionVelocity, predictionAngle, getMagnusConstant(m_projectile, *m_mechanism), m_mechanism.get()->exitY, t)
+                };
+            }
 
             rawPositions.push_back(current);
 
