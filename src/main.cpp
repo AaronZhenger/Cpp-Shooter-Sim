@@ -161,34 +161,17 @@ double getPosY(const Projectile& projectile, const Fluid& fluid, double v0, doub
     return exitY - drift + curvature_1 + curvature_2;
 }
 
-double findTime(const Projectile& projectile, const Fluid& fluid, double v0, double angle, double omega, double exitX, double targetX) {
-    double t = 0.5;
-    for (int iter = 0; iter < 12; ++iter) {
-        double x = getPosX(projectile, fluid, v0, angle, omega, exitX, t);
-        double diff = x - targetX;
-        if (std::abs(diff) < 1e-4) break;
-
-        double dt = 1e-5;
-        double dxdt = (getPosX(projectile, fluid, v0, angle, omega, exitX, t + dt) - x) / dt;
-        if (std::abs(dxdt) < 1e-6) break;
-
-        t -= diff / dxdt;
-        if (t <= 0.0) t = 0.001;
-    }
-    return t;
-}
-
 struct SimpleConfig {
     public:
         SimpleConfig(double theta, double v) : theta(theta), v(v) {};
     double theta, v;
 };
 
-struct DetailedConfig {
-    public:
-        DetailedConfig(SimpleConfig config, double t, double d) : config(config), t(t), d(d) {};
+struct AdvancedConfig {
     SimpleConfig config;
-    double t, d;
+    double t;
+    double d;
+    double clearance;
 };
 
 struct Position {
@@ -397,7 +380,7 @@ int main() {
     std::vector<double> yLabels;
 
     std::vector<SimpleConfig> simpleConfigs;
-    std::vector<DetailedConfig> advConfigs;
+    std::vector<AdvancedConfig> advConfigs;
 
     static int currentMechanism = 0;
     const char* mechanisms = "Dual Rotor\0Single Rotor\0Arm\0Slingshot\0Bounce\0";
@@ -412,7 +395,9 @@ int main() {
     static int predictionMode = 0;
     const char * predictionModes = "Time\0Distance\0Clearance\0";
 
-    double minAngle = 0;
+    bool recalc = false;
+
+    double minAngle = 20.0;
     double maxAngle = 60.0;
     double minVel = 0;
     double maxVel = 40.0;
@@ -458,8 +443,9 @@ int main() {
     double b_v = 10.0;
     double b_phi = -45;
 
-    double predictionVelocity;
-    double predictionAngle;
+    double predictionVelocity = 0.0;
+    double predictionAngle = 0.0;
+    double predictionTime = 0.0;
 
     double lastFrameTime = glfwGetTime();
     float animTime = 0.0f;
@@ -473,6 +459,8 @@ int main() {
         double currentFrameTime = glfwGetTime();
         double deltaTime = currentFrameTime - lastFrameTime;
         lastFrameTime = currentFrameTime;
+
+        recalc = false;
 
         if (isPlaying) {
             animTime += static_cast<float>(deltaTime) * playbackSpeed;
@@ -499,11 +487,13 @@ int main() {
         ImGui::Text("Mode:        ");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(120.0);
-        ImGui::Combo("##mode", &currentMode, modes);
+        if (ImGui::Combo("##mode", &currentMode, modes))
+            recalc = true;
         ImGui::Text("Mechanism:   ");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(120.0);
-        ImGui::Combo("##mech", &currentMechanism, mechanisms);
+        if (ImGui::Combo("##mech", &currentMechanism, mechanisms))
+            recalc = true;
         if (currentMode == 1) {
             ImGui::Text("Flight Time: ");
             ImGui::SameLine();
@@ -531,41 +521,42 @@ int main() {
             if (predictionMode == 2) {
                 ImGui::SetWindowSize(ImVec2(240.0, 245.0), ImGuiCond_Always);
             }
+
             ImGui::Separator();
-            ImGui::Combo("##pm", &predictionMode, predictionModes);
+            if (ImGui::Combo("##pm", &predictionMode, predictionModes)) recalc = true;
             ImGui::Text("Min Angle:   ");
             ImGui::SameLine();
             ImGui::SetNextItemWidth(120.0);
-            ImGui::InputDouble("##mina", &minAngle);
+            if (ImGui::InputDouble("##mina", &minAngle)) recalc = true;
             ImGui::Text("Max Angle:   ");
             ImGui::SameLine();
             ImGui::SetNextItemWidth(120.0);
-            ImGui::InputDouble("##maxa", &maxAngle);
+            if (ImGui::InputDouble("##maxa", &maxAngle)) recalc = true;
             ImGui::Text("Min Velocity:");
             ImGui::SameLine();
             ImGui::SetNextItemWidth(120.0);
-            ImGui::InputDouble("##minv", &minVel);
+            if (ImGui::InputDouble("##minv", &minVel)) recalc = true;
             ImGui::Text("Max Velocity:");
             ImGui::SameLine();
             ImGui::SetNextItemWidth(120.0);
-            ImGui::InputDouble("##maxv", &maxVel);
+            if (ImGui::InputDouble("##maxv", &maxVel)) recalc = true;
             ImGui::Text("Final X:     ");
             ImGui::SameLine();
             ImGui::SetNextItemWidth(120.0);
-            ImGui::InputDouble("##fx", &f_x);
+            if (ImGui::InputDouble("##fx", &f_x)) recalc = true;
             ImGui::Text("Final Y:     ");
             ImGui::SameLine();
             ImGui::SetNextItemWidth(120.0);
-            ImGui::InputDouble("##fy", &f_y);
+            if (ImGui::InputDouble("##fy", &f_y)) recalc = true;
             if (predictionMode == 2) {
                 ImGui::Text("Obstacle X:  ");
                 ImGui::SameLine();
                 ImGui::SetNextItemWidth(120.0);
-                ImGui::InputDouble("##ox", &o_x);
+                if (ImGui::InputDouble("##ox", &o_x)) recalc = true;
                 ImGui::Text("Obstacle Y:  ");
                 ImGui::SameLine();
                 ImGui::SetNextItemWidth(120.0);
-                ImGui::InputDouble("##oy", &o_y);
+                if (ImGui::InputDouble("##oy", &o_y)) recalc = true;
             }
             ImGui::End();
         }
@@ -772,44 +763,110 @@ int main() {
         simpleConfigs.clear();
         advConfigs.clear();
 
-        for (int a = minAngle; a <= maxAngle; a+=0.1) {
-            for (int v = minVel; v <= maxVel; v+=0.02) {
-                for (int t = 0; t < 2; t+=0.005) {
-                    if (predictionMode == 2) {
+        if (currentMode == 2 && recalc) {
+            simpleConfigs.clear();
+            advConfigs.clear();
 
-                    } else {
-                        if (std::abs(getPosX(m_projectile, m_fluid, predictionVelocity, predictionAngle, getMagnusConstant(m_projectile, *m_mechanism), m_mechanism.get()->exitX, t)-f_x) < 0.01
-                            && std::abs(getPosY(m_projectile, m_fluid, predictionVelocity, predictionAngle, getMagnusConstant(m_projectile, *m_mechanism), m_mechanism.get()->exitY, t)-f_y) < 0.01) {
+            double omega = getMagnusConstant(m_projectile, *m_mechanism);
+            double exitX = m_mechanism->exitX;
+            double exitY = m_mechanism->exitY;
+
+            for (double a = minAngle; a <= maxAngle; a += 0.05) {
+                double angleRad = a * 3.141592653589793 / 180.0;
+            
+                for (double v = minVel; v <= maxVel; v += 0.1) {
+                    double d = 0.0;
+                    bool hitObstacle = false;
+                    double obstacleClearance = 1e6;
+                
+                    for (double t = 0.02; t < 3.0; t += 0.02) {
+                        double currX = getPosX(m_projectile, m_fluid, v, angleRad, omega, exitX, t);
+                        double currY = getPosY(m_projectile, m_fluid, v, angleRad, omega, exitY, t);
                     
+                        double prevX = getPosX(m_projectile, m_fluid, v, angleRad, omega, exitX, t - 0.02);
+                        double prevY = getPosY(m_projectile, m_fluid, v, angleRad, omega, exitY, t - 0.02);
+                    
+                        double dx = currX - prevX;
+                        double dy = currY - prevY;
+                        d += std::sqrt(dx * dx + dy * dy);
+                    
+                        if (predictionMode == 2 && prevX < o_x && currX >= o_x) {
+                            obstacleClearance = currY - o_y;
+                            if (currY < o_y) {
+                                hitObstacle = true;
+                                break;
+                            }
                         }
+                    
+                        if (std::abs(currX - f_x) < 0.05 && std::abs(currY - f_y) < 0.05) {
+                            if (!hitObstacle) {
+                                SimpleConfig simpleConfig = {a, v};
+                                AdvancedConfig advConfig = {simpleConfig, t, d, obstacleClearance}; 
+                                simpleConfigs.push_back(simpleConfig);
+                                advConfigs.push_back(advConfig);
+                            }
+                            break;
+                        }
+                        if (currX > f_x + 1.0) break;
                     }
                 }
             }
+        
+            if (!advConfigs.empty()) {
+                int bestIdx = 0;
+            
+                if (predictionMode == 2) {
+                    double bestVal = -1e6;
+                    for (size_t i = 0; i < advConfigs.size(); i++) {
+                        if (advConfigs[i].clearance > bestVal) {
+                            bestVal = advConfigs[i].clearance;
+                            bestIdx = static_cast<int>(i);
+                        }
+                    }
+                } else {
+                    double bestVal = 1e6;
+                    for (size_t i = 0; i < advConfigs.size(); i++) {
+                        double val = (predictionMode == 0) ? advConfigs[i].t : advConfigs[i].d;
+                        if (val < bestVal) {
+                            bestVal = val;
+                            bestIdx = static_cast<int>(i);
+                        }
+                    }
+                }
+            
+                predictionAngle = advConfigs[bestIdx].config.theta;
+                predictionVelocity = advConfigs[bestIdx].config.v;
+                predictionTime = advConfigs[bestIdx].t;
+            }
+        
+            recalc = false;
         }
 
         rawPositions.reserve(seconds * hz);
         double startY = getPosY(m_projectile, m_fluid, *m_mechanism, 0.0);
 
         double iterations = time * hz;
+
         if (currentMode == 0)
             iterations = seconds * hz;
+        else if (currentMode == 2)
+            iterations = predictionTime * hz;
 
         for (int i = 0; i < iterations; i++) {
             double t = i * (1.0 / hz);
-            Position current = {
-                getPosX(m_projectile, m_fluid, *m_mechanism, t),
-                getPosY(m_projectile, m_fluid, *m_mechanism, t)
-            };
-
+            Position current(0, 0);
+        
             if (currentMode == 2) {
+                double predAngleRad = predictionAngle * 3.141592653589793 / 180.0;
                 current = {
-                    getPosX(m_projectile, m_fluid, predictionVelocity, predictionAngle, getMagnusConstant(m_projectile, *m_mechanism), m_mechanism.get()->exitX, t),
-                    getPosY(m_projectile, m_fluid, predictionVelocity, predictionAngle, getMagnusConstant(m_projectile, *m_mechanism), m_mechanism.get()->exitY, t)
+                    getPosX(m_projectile, m_fluid, predictionVelocity, predAngleRad, getMagnusConstant(m_projectile, *m_mechanism), m_mechanism->exitX, t),
+                    getPosY(m_projectile, m_fluid, predictionVelocity, predAngleRad, getMagnusConstant(m_projectile, *m_mechanism), m_mechanism->exitY, t)
                 };
-            }
+            } else
+                current = {getPosX(m_projectile, m_fluid, *m_mechanism, t), getPosY(m_projectile, m_fluid, *m_mechanism, t)};
 
             rawPositions.push_back(current);
-
+        
             if (currentMode == 0 && i > 1 && current.y <= startY)
                 break;
         }
