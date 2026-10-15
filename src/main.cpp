@@ -402,7 +402,7 @@ int main() {
     double minVel = 0;
     double maxVel = 40.0;
 
-    double f_x = 5.0;
+    double f_x = 6.0;
     double f_y = 0.0;
     double o_x = 4.0;
     double o_y = 2.0;
@@ -519,7 +519,7 @@ int main() {
             ImGui::SetWindowPos(ImVec2(540.0, 20.0), ImGuiCond_Once);
             ImGui::SetWindowSize(ImVec2(240.0, 200.0), ImGuiCond_Always);
             if (predictionMode == 2) {
-                ImGui::SetWindowSize(ImVec2(240.0, 245.0), ImGuiCond_Always);
+                ImGui::SetWindowSize(ImVec2(240.0, 295.0), ImGuiCond_Always);
             }
 
             ImGui::Separator();
@@ -557,6 +557,9 @@ int main() {
                 ImGui::SameLine();
                 ImGui::SetNextItemWidth(120.0);
                 if (ImGui::InputDouble("##oy", &o_y)) recalc = true;
+                ImGui::Text("Velocity: %.3f", predictionVelocity);
+                ImGui::Text("Angle: %.3f", predictionAngle);
+                ImGui::Text("Time: %.3f", predictionTime);
             }
             ImGui::End();
         }
@@ -803,7 +806,7 @@ int main() {
                                 SimpleConfig simpleConfig = {a, v};
                                 AdvancedConfig advConfig = {simpleConfig, t, d, obstacleClearance}; 
                                 simpleConfigs.push_back(simpleConfig);
-                                advConfigs.push_back(advConfig);
+                                advConfigs.push_back(advConfig); 
                             }
                             break;
                         }
@@ -816,9 +819,9 @@ int main() {
                 int bestIdx = 0;
             
                 if (predictionMode == 2) {
-                    double bestVal = -1e6;
+                    double bestVal = 1e6;
                     for (size_t i = 0; i < advConfigs.size(); i++) {
-                        if (advConfigs[i].clearance > bestVal) {
+                        if (advConfigs[i].clearance < bestVal) {
                             bestVal = advConfigs[i].clearance;
                             bestIdx = static_cast<int>(i);
                         }
@@ -881,6 +884,11 @@ int main() {
             }
         }
 
+        float targetNormX = 0.0f, targetNormY = 0.0f;
+        float obstacleNormX = 0.0f, obstacleNormY = 0.0f;
+        bool drawTarget = false;
+        bool drawObstacle = false;
+
         if (!rawPositions.empty()) {
             double minX = rawPositions[0].x;
             double maxX = rawPositions[0].x;
@@ -901,6 +909,21 @@ int main() {
             minY = centerY - padding;
             maxY = centerY + padding;
             
+            minX = centerX - padding;
+            maxX = centerX + padding;
+            minY = centerY - padding;
+            maxY = centerY + padding;
+
+            targetNormX = static_cast<float>(-1.0 + 2.0 * ((f_x - minX) / (maxX - minX)));
+            targetNormY = static_cast<float>(-0.25 + 1.25 * ((f_y - minY) / (maxY - minY)));
+            drawTarget = true;
+
+            if (currentMode == 2 && predictionMode == 2) {
+                obstacleNormX = static_cast<float>(-1.0 + 2.0 * ((o_x - minX) / (maxX - minX)));
+                obstacleNormY = static_cast<float>(-0.25 + 1.25 * ((o_y - minY) / (maxY - minY)));
+                drawObstacle = true;
+            }
+
             positions.reserve(rawPositions.size());
             for (const auto& p : rawPositions) {
                 float normX = static_cast<float>(-1.0 + 2.0 * ((p.x - minX) / (maxX - minX)));
@@ -939,7 +962,7 @@ int main() {
             glBindVertexArray(gridVAO);
             glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(gridPositions.size()));
         }
-        
+
         if (!positions.empty()) {
             size_t visibleCount = std::min(positions.size(), static_cast<size_t>(animTime * hz));
 
@@ -954,6 +977,20 @@ int main() {
                 glEnable(GL_PROGRAM_POINT_SIZE);
                 glDrawArrays(GL_POINTS, static_cast<GLsizei>(visibleCount - 1), 1);
             }
+
+            glDisableVertexAttribArray(0);
+
+            if (drawTarget) {
+                glVertexAttrib2f(0, targetNormX, targetNormY);
+                glDrawArrays(GL_POINTS, 0, 1);
+            }
+        
+            if (drawObstacle) {
+                glVertexAttrib2f(0, obstacleNormX, obstacleNormY);
+                glDrawArrays(GL_POINTS, 0, 1);
+            }
+        
+            glEnableVertexAttribArray(0);
         }
 
         if (!rawPositions.empty()) {
