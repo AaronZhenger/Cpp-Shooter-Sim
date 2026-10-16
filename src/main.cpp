@@ -397,8 +397,10 @@ int main() {
 
     bool recalc = false;
 
+    bool valid = false;
+
     double minAngle = 20.0;
-    double maxAngle = 60.0;
+    double maxAngle = 80.0;
     double minVel = 0;
     double maxVel = 40.0;
 
@@ -515,11 +517,17 @@ int main() {
         ImGui::End();
 
         if (currentMode == 2) {
-            ImGui::Begin("Predictions");
+            ImGui::Begin("Optimizations");
             ImGui::SetWindowPos(ImVec2(540.0, 20.0), ImGuiCond_Once);
-            ImGui::SetWindowSize(ImVec2(240.0, 200.0), ImGuiCond_Always);
+            ImGui::SetWindowSize(ImVec2(240.0, 255.0), ImGuiCond_Always);
+            if (!valid) {
+                ImGui::SetWindowSize(ImVec2(240.0, 230.0), ImGuiCond_Always);
+            }
             if (predictionMode == 2) {
                 ImGui::SetWindowSize(ImVec2(240.0, 295.0), ImGuiCond_Always);
+                if (!valid) {
+                    ImGui::SetWindowSize(ImVec2(240.0, 270.0), ImGuiCond_Always);
+                }
             }
 
             ImGui::Separator();
@@ -557,10 +565,12 @@ int main() {
                 ImGui::SameLine();
                 ImGui::SetNextItemWidth(120.0);
                 if (ImGui::InputDouble("##oy", &o_y)) recalc = true;
-                ImGui::Text("Velocity: %.3f", predictionVelocity);
-                ImGui::Text("Angle: %.3f", predictionAngle);
-                ImGui::Text("Time: %.3f", predictionTime);
             }
+            if (valid) {
+                    ImGui::Text("Velocity: %.3f", predictionVelocity);
+                    ImGui::Text("Angle: %.3f", predictionAngle);
+                    ImGui::Text("Time: %.3f", predictionTime);
+            } else ImGui::Text("CONFIGURATION INVALID");
             ImGui::End();
         }
 
@@ -816,6 +826,7 @@ int main() {
             }
         
             if (!advConfigs.empty()) {
+                valid = true;
                 int bestIdx = 0;
             
                 if (predictionMode == 2) {
@@ -840,7 +851,7 @@ int main() {
                 predictionAngle = advConfigs[bestIdx].config.theta;
                 predictionVelocity = advConfigs[bestIdx].config.v;
                 predictionTime = advConfigs[bestIdx].t;
-            }
+            } else valid = false;
         
             recalc = false;
         }
