@@ -16,4 +16,7 @@ class Bounce : public Mechanism {
 
         virtual double getExitVelocity(const Projectile& projectile) const override;
         virtual double getExitAngle(const Projectile& projectile) const override;
+        virtual double getExitBackspin(const Projectile& projectile) const override;
+
+        virtual double getExitVelocity(const Projectile& projectile, double parA, double parB) const override;
 };

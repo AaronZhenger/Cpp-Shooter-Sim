@@ -22,3 +22,7 @@ double DualRotor::getExitAngle(const Projectile& projectile) const {
 double DualRotor::getExitBackspin(const Projectile& projectile) const {
     return efficiency * (bottomFlywheelRadius * bottomFlywheelAngularVelocity - topFlywheelRadius * topFlywheelAngularVelocity) / projectile.radius / 2.0;
 }
+
+double DualRotor::getExitVelocity(const Projectile &projectile, double parA, double parB) const {
+    return efficiency * (topFlywheelRadius * parA + bottomFlywheelRadius * parB) / 2.0;
+}

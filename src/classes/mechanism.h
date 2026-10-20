@@ -14,6 +14,7 @@ class Mechanism {
         double exitY;
     
         virtual double getExitVelocity(const Projectile& projectile) const;
+        virtual double getExitVelocity(const Projectile& projectile, double parA, double parB) const;
         virtual double getExitAngle(const Projectile& projectile) const;
         virtual double getExitBackspin(const Projectile& projectile) const;
 };

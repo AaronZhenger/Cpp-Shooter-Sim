@@ -18,3 +18,8 @@ double Mechanism::getExitBackspin(const Projectile& projectile) const {
     std::cout << "Mechanism not configured yet\n";
     return 0.0;
 }
+
+double Mechanism::getExitVelocity(const Projectile& projectile, double parA, double parB) const {
+    std::cout << "Mechanism not configured yet\n";
+    return 0.0;
+}

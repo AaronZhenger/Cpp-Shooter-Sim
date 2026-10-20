@@ -386,14 +386,14 @@ int main() {
     const char* mechanisms = "Dual Rotor\0Single Rotor\0Arm\0Slingshot\0Bounce\0";
 
     static int currentMode = 0;
-    const char* modes = "Horizontal\0Raw Time\0Prediction\0";
+    const char* modes = "Horizontal\0Raw Time\0Optimizations\0";
     
     static int fluidPreset = 1;
     const char* fluids = "None\0Air\0Water\0";
     double fluidDensity = 0.0;
 
-    static int predictionMode = 0;
-    const char * predictionModes = "Time\0Distance\0Clearance\0";
+    static int optimizationMode = 0;
+    const char * optimizationModes = "Time\0Distance\0Clearance\0";
 
     bool recalc = false;
 
@@ -454,6 +454,9 @@ int main() {
     bool isPlaying = true;
     float playbackSpeed = 1.0f;
     bool loopAnimation = true;
+
+    double predictionParA = 0.0;
+    double predictionParB = 0.0;
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
@@ -523,15 +526,14 @@ int main() {
             if (!valid) {
                 ImGui::SetWindowSize(ImVec2(240.0, 230.0), ImGuiCond_Always);
             }
-            if (predictionMode == 2) {
-                ImGui::SetWindowSize(ImVec2(240.0, 295.0), ImGuiCond_Always);
+            if (optimizationMode == 2) {
+                ImGui::SetWindowSize(ImVec2(240.0, 315.0), ImGuiCond_Always);
                 if (!valid) {
                     ImGui::SetWindowSize(ImVec2(240.0, 270.0), ImGuiCond_Always);
                 }
             }
-
             ImGui::Separator();
-            if (ImGui::Combo("##pm", &predictionMode, predictionModes)) recalc = true;
+            if (ImGui::Combo("##pm", &optimizationMode, optimizationModes)) recalc = true;
             ImGui::Text("Min Angle:   ");
             ImGui::SameLine();
             ImGui::SetNextItemWidth(120.0);
@@ -556,7 +558,7 @@ int main() {
             ImGui::SameLine();
             ImGui::SetNextItemWidth(120.0);
             if (ImGui::InputDouble("##fy", &f_y)) recalc = true;
-            if (predictionMode == 2) {
+            if (optimizationMode == 2) {
                 ImGui::Text("Obstacle X:  ");
                 ImGui::SameLine();
                 ImGui::SetNextItemWidth(120.0);
@@ -566,10 +568,26 @@ int main() {
                 ImGui::SetNextItemWidth(120.0);
                 if (ImGui::InputDouble("##oy", &o_y)) recalc = true;
             }
+            ImGui::Separator();
             if (valid) {
-                    ImGui::Text("Velocity: %.3f", predictionVelocity);
-                    ImGui::Text("Angle: %.3f", predictionAngle);
-                    ImGui::Text("Time: %.3f", predictionTime);
+                ImGui::Text("Velocity: %.3f", predictionVelocity);
+                ImGui::Text("Angle: %.3f", predictionAngle);
+                ImGui::Text("Time: %.3f", predictionTime);
+                // switch (currentMechanism) {
+                //     case 0 :
+
+                //         break;
+                //     case 1 :
+                //         break;
+                //     case 2 :
+                //         break;
+                //     case 3 :
+                //         break;
+                //     case 4 :
+                //         break;
+                // }
+                ImGui::Text("ParA: %.3f", predictionParA);
+                ImGui::Text("ParB: %.3f", predictionParB);
             } else ImGui::Text("CONFIGURATION INVALID");
             ImGui::End();
         }
@@ -803,7 +821,7 @@ int main() {
                         double dy = currY - prevY;
                         d += std::sqrt(dx * dx + dy * dy);
                     
-                        if (predictionMode == 2 && prevX < o_x && currX >= o_x) {
+                        if (optimizationMode == 2 && prevX < o_x && currX >= o_x) {
                             obstacleClearance = currY - o_y;
                             if (currY < o_y) {
                                 hitObstacle = true;
@@ -829,7 +847,7 @@ int main() {
                 valid = true;
                 int bestIdx = 0;
             
-                if (predictionMode == 2) {
+                if (optimizationMode == 2) {
                     double bestVal = 1e6;
                     for (size_t i = 0; i < advConfigs.size(); i++) {
                         if (advConfigs[i].clearance < bestVal) {
@@ -840,7 +858,7 @@ int main() {
                 } else {
                     double bestVal = 1e6;
                     for (size_t i = 0; i < advConfigs.size(); i++) {
-                        double val = (predictionMode == 0) ? advConfigs[i].t : advConfigs[i].d;
+                        double val = (optimizationMode == 0) ? advConfigs[i].t : advConfigs[i].d;
                         if (val < bestVal) {
                             bestVal = val;
                             bestIdx = static_cast<int>(i);
@@ -854,6 +872,21 @@ int main() {
             } else valid = false;
         
             recalc = false;
+
+            for (double i = 0; i < 40; i+=0.05) {
+                if (currentMode == 0) {
+                    for (double j = 0; j < 40; j+=0.05) {
+                        if (std::abs(m_mechanism.get()->getExitVelocity(m_projectile, i, j))-predictionVelocity <= 0.05) {
+                            predictionParA = i;
+                            predictionParB = j;
+                        }
+                    }
+                } else {
+                    if (std::abs(m_mechanism.get()->getExitVelocity(m_projectile, i, 0))-predictionVelocity <= 0.05) {
+                        predictionParA = i;
+                    }
+                }
+            }
         }
 
         rawPositions.reserve(seconds * hz);
@@ -919,17 +952,12 @@ int main() {
             maxX = centerX + padding;
             minY = centerY - padding;
             maxY = centerY + padding;
-            
-            minX = centerX - padding;
-            maxX = centerX + padding;
-            minY = centerY - padding;
-            maxY = centerY + padding;
 
             targetNormX = static_cast<float>(-1.0 + 2.0 * ((f_x - minX) / (maxX - minX)));
             targetNormY = static_cast<float>(-0.25 + 1.25 * ((f_y - minY) / (maxY - minY)));
             drawTarget = true;
 
-            if (currentMode == 2 && predictionMode == 2) {
+            if (currentMode == 2 && optimizationMode == 2) {
                 obstacleNormX = static_cast<float>(-1.0 + 2.0 * ((o_x - minX) / (maxX - minX)));
                 obstacleNormY = static_cast<float>(-0.25 + 1.25 * ((o_y - minY) / (maxY - minY)));
                 drawObstacle = true;

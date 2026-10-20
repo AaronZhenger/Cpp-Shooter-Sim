@@ -11,3 +11,12 @@ double Bounce::getExitVelocity(const Projectile& projectile) const {
 double Bounce::getExitAngle(const Projectile& projectile) const {
     return 2 * surfaceAngleWithHorizontal - angleOfIncidence;
 }
+
+double Bounce::getExitBackspin(const Projectile& projectile) const {
+    return 0;
+}
+
+double Bounce::getExitVelocity(const Projectile& projectile, double parA, double parB) const {
+    return efficiency
+        * parA;
+}

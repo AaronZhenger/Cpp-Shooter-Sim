@@ -15,4 +15,6 @@ public:
     double getExitVelocity(const Projectile& projectile) const override;
     double getExitAngle(const Projectile& projectile) const override;
     double getExitBackspin(const Projectile& projectile) const override;
+
+    double getExitVelocity(const Projectile& projectile, double parA, double parB) const override;
 };

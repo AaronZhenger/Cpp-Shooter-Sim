@@ -22,3 +22,8 @@ double SlingShot::getExitAngle(const Projectile& projectile) const {
 double SlingShot::getExitBackspin(const Projectile& projectile) const {
     return 0.0;
 }
+
+double SlingShot::getExitVelocity(const Projectile& projectile, double parA, double parB) const {
+    return parA
+        * std::sqrt((efficiency * slingElasticity) / (projectile.mass + slingMass / 3.0));
+}

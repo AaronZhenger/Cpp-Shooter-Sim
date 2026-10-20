@@ -19,3 +19,7 @@ double Arm::getExitAngle(const Projectile& projectile) const {
 double Arm::getExitBackspin(const Projectile& projectile) const {
     return angularVelocity;
 }
+
+double Arm::getExitVelocity(const Projectile& projectile, double parA, double parB) const {
+    return efficiency * radius * parA;
+}
