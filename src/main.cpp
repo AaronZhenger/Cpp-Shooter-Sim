@@ -458,6 +458,8 @@ int main() {
     double predictionParA = 0.0;
     double predictionParB = 0.0;
 
+    double bestErr = 1e9;
+
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
 
@@ -522,12 +524,12 @@ int main() {
         if (currentMode == 2) {
             ImGui::Begin("Optimizations");
             ImGui::SetWindowPos(ImVec2(540.0, 20.0), ImGuiCond_Once);
-            ImGui::SetWindowSize(ImVec2(240.0, 255.0), ImGuiCond_Always);
+            ImGui::SetWindowSize(ImVec2(240.0, 305.0), ImGuiCond_Always);
             if (!valid) {
-                ImGui::SetWindowSize(ImVec2(240.0, 230.0), ImGuiCond_Always);
+                ImGui::SetWindowSize(ImVec2(240.0, 250.0), ImGuiCond_Always);
             }
             if (optimizationMode == 2) {
-                ImGui::SetWindowSize(ImVec2(240.0, 315.0), ImGuiCond_Always);
+                ImGui::SetWindowSize(ImVec2(240.0, 355.0), ImGuiCond_Always);
                 if (!valid) {
                     ImGui::SetWindowSize(ImVec2(240.0, 270.0), ImGuiCond_Always);
                 }
@@ -573,21 +575,25 @@ int main() {
                 ImGui::Text("Velocity: %.3f", predictionVelocity);
                 ImGui::Text("Angle: %.3f", predictionAngle);
                 ImGui::Text("Time: %.3f", predictionTime);
-                // switch (currentMechanism) {
-                //     case 0 :
-
-                //         break;
-                //     case 1 :
-                //         break;
-                //     case 2 :
-                //         break;
-                //     case 3 :
-                //         break;
-                //     case 4 :
-                //         break;
-                // }
-                ImGui::Text("ParA: %.3f", predictionParA);
-                ImGui::Text("ParB: %.3f", predictionParB);
+                ImGui::Text("Best Error: %.3f", bestErr);
+                switch (currentMechanism) {
+                    case 0 :
+                        ImGui::Text("Bottom Flywheel Velocity: %.3f", predictionParA);
+                        ImGui::Text("Top Flywheel Velocity: %.3f", predictionParB);
+                        break;
+                    case 1 :
+                        ImGui::Text("Flywheel Velocity: %.3f", predictionParA);
+                        break;
+                    case 2 :
+                        ImGui::Text("Angular Velocity: %.3f", predictionParA);
+                        break;
+                    case 3 :
+                        ImGui::Text("Displacement: %.3f", predictionParA);
+                        break;
+                    case 4 :
+                        ImGui::Text("Surface Velocity: %.3f", predictionParA);
+                        break;
+                }
             } else ImGui::Text("CONFIGURATION INVALID");
             ImGui::End();
         }
@@ -873,19 +879,30 @@ int main() {
         
             recalc = false;
 
-            for (double i = 0; i < 40; i+=0.05) {
-                if (currentMode == 0) {
-                    for (double j = 0; j < 40; j+=0.05) {
-                        if (std::abs(m_mechanism.get()->getExitVelocity(m_projectile, i, j))-predictionVelocity <= 0.05) {
+            bestErr = 1e9;
+            for (double i = 0; i < 100; i+=0.1) {
+                if (currentMechanism == 0) {
+                    for (double j = 0; j < 100; j+=0.1) {
+                        double exitV = m_mechanism->getExitVelocity(m_projectile, i, i);
+                        double err = std::abs(exitV-predictionVelocity);
+                        if (err < bestErr) {
+                            bestErr = err;
                             predictionParA = i;
                             predictionParB = j;
                         }
                     }
+                    
                 } else {
-                    if (std::abs(m_mechanism.get()->getExitVelocity(m_projectile, i, 0))-predictionVelocity <= 0.05) {
+                    double exitV = m_mechanism->getExitVelocity(m_projectile, i, 0);
+                    double err = std::abs(exitV-predictionVelocity);
+                    if (err < bestErr) {
+                        bestErr = err;
                         predictionParA = i;
                     }
                 }
+            }
+            if (bestErr > 2.0) {
+                // valid = false;
             }
         }
 
