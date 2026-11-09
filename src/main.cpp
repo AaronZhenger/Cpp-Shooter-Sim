@@ -399,6 +399,8 @@ int main() {
 
     bool valid = false;
 
+    bool advanced = true;
+
     double minAngle = 20.0;
     double maxAngle = 80.0;
     double minVel = 0;
@@ -430,7 +432,7 @@ int main() {
 
     double s_fr = 0.2;
     double s_fav = 40.0;
-    double s_ra = 3.14/4;
+    double s_ra = 45;
 
     double a_r = 0.5;
     double a_av = 6.0;
@@ -487,9 +489,9 @@ int main() {
 
         ImGui::Begin("Controls");
         ImGui::SetWindowPos(ImVec2(50.0, 20.0), ImGuiCond_Once);
-        ImGui::SetWindowSize(ImVec2(240.0, 150.0), ImGuiCond_Always);
+        ImGui::SetWindowSize(ImVec2(240.0, 190.0), ImGuiCond_Always);
         if (currentMode == 1)
-            ImGui::SetWindowSize(ImVec2(240.0, 170.0), ImGuiCond_Always);
+            ImGui::SetWindowSize(ImVec2(240.0, 210.0), ImGuiCond_Always);
         ImGui::Text("FPS: %.0f", ImGui::GetIO().Framerate);
         ImGui::Text("Mode:        ");
         ImGui::SameLine();
@@ -507,10 +509,16 @@ int main() {
             ImGui::SetNextItemWidth(120.0);
             ImGui::InputDouble("##time", &time);
         }
+        ImGui::Text("Calculation Mode");
+        if (advanced)
+            ImGui::Text("Accuracy:    ");
+        else ImGui::Text("Speed:       ");
+        ImGui::SameLine();
+        if (ImGui::Button("Toggle")) advanced = !advanced;
         ImGui::Separator();
         if (ImGui::Button(isPlaying ? "Pause" : "Play")) isPlaying = !isPlaying;
         ImGui::SameLine();
-        if (ImGui::Button("Reset")) animTime = 0.0f;
+        if (ImGui::Button("Reset")) {animTime = 0.0f; playbackSpeed = 1.0;}
         ImGui::SameLine();
         ImGui::Checkbox("Loop", &loopAnimation);
         ImGui::SetNextItemWidth(120.0);
@@ -800,6 +808,10 @@ int main() {
         simpleConfigs.clear();
         advConfigs.clear();
 
+        double angleIncrement = advanced ? 0.05 : 0.1;
+        double velocityIncrement = advanced ? 0.1 : 0.2;
+        double timeIncrement = advanced ? 0.02 : 0.05;
+
         if (currentMode == 2 && recalc) {
             simpleConfigs.clear();
             advConfigs.clear();
@@ -808,15 +820,15 @@ int main() {
             double exitX = m_mechanism->exitX;
             double exitY = m_mechanism->exitY;
 
-            for (double a = minAngle; a <= maxAngle; a += 0.05) {
+            for (double a = minAngle; a <= maxAngle; a += angleIncrement) {
                 double angleRad = a * 3.141592653589793 / 180.0;
             
-                for (double v = minVel; v <= maxVel; v += 0.1) {
+                for (double v = minVel; v <= maxVel; v += velocityIncrement) {
                     double d = 0.0;
                     bool hitObstacle = false;
                     double obstacleClearance = 1e6;
                 
-                    for (double t = 0.02; t < 3.0; t += 0.02) {
+                    for (double t = 0.02; t < 3.0; t += timeIncrement) {
                         double currX = getPosX(m_projectile, m_fluid, v, angleRad, omega, exitX, t);
                         double currY = getPosY(m_projectile, m_fluid, v, angleRad, omega, exitY, t);
                     
@@ -972,13 +984,13 @@ int main() {
 
             targetNormX = static_cast<float>(-1.0 + 2.0 * ((f_x - minX) / (maxX - minX)));
             targetNormY = static_cast<float>(-0.25 + 1.25 * ((f_y - minY) / (maxY - minY)));
-            drawTarget = true;
+            if (currentMode == 2) drawTarget = true; else drawTarget = false;
 
             if (currentMode == 2 && optimizationMode == 2) {
                 obstacleNormX = static_cast<float>(-1.0 + 2.0 * ((o_x - minX) / (maxX - minX)));
                 obstacleNormY = static_cast<float>(-0.25 + 1.25 * ((o_y - minY) / (maxY - minY)));
                 drawObstacle = true;
-            }
+            } else drawObstacle = false;
 
             positions.reserve(rawPositions.size());
             for (const auto& p : rawPositions) {
