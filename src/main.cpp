@@ -400,6 +400,7 @@ int main() {
     bool valid = false;
 
     bool advanced = true;
+    bool spm = true;
 
     double minAngle = 20.0;
     double maxAngle = 80.0;
@@ -489,9 +490,9 @@ int main() {
 
         ImGui::Begin("Controls");
         ImGui::SetWindowPos(ImVec2(50.0, 20.0), ImGuiCond_Once);
-        ImGui::SetWindowSize(ImVec2(240.0, 190.0), ImGuiCond_Always);
+        ImGui::SetWindowSize(ImVec2(240.0, 210.0), ImGuiCond_Always);
         if (currentMode == 1)
-            ImGui::SetWindowSize(ImVec2(240.0, 210.0), ImGuiCond_Always);
+            ImGui::SetWindowSize(ImVec2(240.0, 230.0), ImGuiCond_Always);
         ImGui::Text("FPS: %.0f", ImGui::GetIO().Framerate);
         ImGui::Text("Mode:        ");
         ImGui::SameLine();
@@ -515,6 +516,12 @@ int main() {
         else ImGui::Text("Speed:       ");
         ImGui::SameLine();
         if (ImGui::Button("Toggle")) advanced = !advanced;
+        ImGui::Separator();
+        if (spm)
+            ImGui::Text("Simple:      ");
+        else ImGui::Text("Advanced:    ");
+        ImGui::SameLine();
+        if (ImGui::Button("SPM")) spm = !spm;
         ImGui::Separator();
         if (ImGui::Button(isPlaying ? "Pause" : "Play")) isPlaying = !isPlaying;
         ImGui::SameLine();
@@ -812,11 +819,22 @@ int main() {
         double velocityIncrement = advanced ? 0.1 : 0.2;
         double timeIncrement = advanced ? 0.02 : 0.05;
 
+        Fluid activeFluid = m_fluid;
+        Projectile activeProjectile = m_projectile;
+        double omega = spm ? 0.0 : getMagnusConstant(activeProjectile, *m_mechanism);
+
+        if (spm) {
+            activeFluid.density = 0.0;
+            activeProjectile.crossSectionalArea = 0.0;
+            activeProjectile.dragCoefficient = 0.0;
+            activeProjectile.magnusCoefficient = 0.0;
+            activeProjectile.rotationalInertia = 0.0;
+        }
+
         if (currentMode == 2 && recalc) {
             simpleConfigs.clear();
             advConfigs.clear();
 
-            double omega = getMagnusConstant(m_projectile, *m_mechanism);
             double exitX = m_mechanism->exitX;
             double exitY = m_mechanism->exitY;
 
@@ -829,11 +847,11 @@ int main() {
                     double obstacleClearance = 1e6;
                 
                     for (double t = 0.02; t < 3.0; t += timeIncrement) {
-                        double currX = getPosX(m_projectile, m_fluid, v, angleRad, omega, exitX, t);
-                        double currY = getPosY(m_projectile, m_fluid, v, angleRad, omega, exitY, t);
+                        double currX = getPosX(activeProjectile, activeFluid, v, angleRad, omega, exitX, t);
+                        double currY = getPosY(activeProjectile, activeFluid, v, angleRad, omega, exitY, t);
                     
-                        double prevX = getPosX(m_projectile, m_fluid, v, angleRad, omega, exitX, t - 0.02);
-                        double prevY = getPosY(m_projectile, m_fluid, v, angleRad, omega, exitY, t - 0.02);
+                        double prevX = getPosX(activeProjectile, activeFluid, v, angleRad, omega, exitX, t - 0.02);
+                        double prevY = getPosY(activeProjectile, activeFluid, v, angleRad, omega, exitY, t - 0.02);
                     
                         double dx = currX - prevX;
                         double dy = currY - prevY;
@@ -895,7 +913,7 @@ int main() {
             for (double i = 0; i < 100; i+=0.1) {
                 if (currentMechanism == 0) {
                     for (double j = 0; j < 100; j+=0.1) {
-                        double exitV = m_mechanism->getExitVelocity(m_projectile, i, i);
+                        double exitV = m_mechanism->getExitVelocity(activeProjectile, i, i);
                         double err = std::abs(exitV-predictionVelocity);
                         if (err < bestErr) {
                             bestErr = err;
@@ -905,7 +923,7 @@ int main() {
                     }
                     
                 } else {
-                    double exitV = m_mechanism->getExitVelocity(m_projectile, i, 0);
+                    double exitV = m_mechanism->getExitVelocity(activeProjectile, i, 0);
                     double err = std::abs(exitV-predictionVelocity);
                     if (err < bestErr) {
                         bestErr = err;
@@ -919,7 +937,7 @@ int main() {
         }
 
         rawPositions.reserve(seconds * hz);
-        double startY = getPosY(m_projectile, m_fluid, *m_mechanism, 0.0);
+        double startY = getPosY(activeProjectile, activeFluid, *m_mechanism, 0.0);
 
         double iterations = time * hz;
 
@@ -935,11 +953,11 @@ int main() {
             if (currentMode == 2) {
                 double predAngleRad = predictionAngle * 3.141592653589793 / 180.0;
                 current = {
-                    getPosX(m_projectile, m_fluid, predictionVelocity, predAngleRad, getMagnusConstant(m_projectile, *m_mechanism), m_mechanism->exitX, t),
-                    getPosY(m_projectile, m_fluid, predictionVelocity, predAngleRad, getMagnusConstant(m_projectile, *m_mechanism), m_mechanism->exitY, t)
+                    getPosX(activeProjectile, activeFluid, predictionVelocity, predAngleRad, getMagnusConstant(activeProjectile, *m_mechanism), m_mechanism->exitX, t),
+                    getPosY(activeProjectile, activeFluid, predictionVelocity, predAngleRad, getMagnusConstant(activeProjectile, *m_mechanism), m_mechanism->exitY, t)
                 };
             } else
-                current = {getPosX(m_projectile, m_fluid, *m_mechanism, t), getPosY(m_projectile, m_fluid, *m_mechanism, t)};
+                current = {getPosX(activeProjectile, activeFluid, *m_mechanism, t), getPosY(activeProjectile, m_fluid, *m_mechanism, t)};
 
             rawPositions.push_back(current);
         
